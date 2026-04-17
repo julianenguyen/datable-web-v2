@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
+import { logPhiAccess } from '@/lib/audit'
 import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles } from 'lucide-vue-next'
 import { MOCK_CLIENTS } from '@/data/mockClients'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
@@ -50,6 +51,7 @@ async function loadLogs() {
     .limit(30)
 
   logs.value = data ?? []
+  logPhiAccess(clientId, 'daily_log', 'read')
   logsLoading.value = false
 }
 
@@ -71,6 +73,7 @@ async function loadHealthSummary() {
       avgHrv: avg(data.map(d => d.hrv_ms)),
       avgHr: avg(data.map(d => d.resting_heart_rate)),
     }
+    logPhiAccess(clientId, 'healthkit_snapshot', 'read')
   }
 }
 

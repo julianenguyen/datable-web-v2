@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
+import { logPhiAccess } from '@/lib/audit'
 import { ArrowLeft } from 'lucide-vue-next'
 import { MOCK_CLIENTS } from '@/data/mockClients'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
@@ -38,6 +39,7 @@ onMounted(async () => {
   if (data) {
     brief.value = data as typeof brief.value
     therapistNotes.value = data.therapist_notes ?? ''
+    logPhiAccess(clientId, 'presession_brief', 'read', briefId)
   }
   loading.value = false
 })
