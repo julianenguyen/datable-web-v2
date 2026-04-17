@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+@theme {
+  /* Datable Brand Palette */
+  --color-brand-green: #16A34A;
+  --color-brand-sage: #B7BDA9;
+  --color-brand-teal: #0D9488;
+  --color-brand-teal-dark: #0F766E;
+
+  /* Core Surfaces */
+  --color-background: #F5F7F5;
+  --color-foreground: #0D1F1D;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #0D1F1D;
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: #0D1F1D;
+
+  /* Primary = Teal */
+  --color-primary: #0D9488;
+  --color-primary-foreground: #FFFFFF;
+
+  /* Secondary = Deep Teal */
+  --color-secondary: #0F766E;
+  --color-secondary-foreground: #FFFFFF;
+
+  /* Accent = Medium Teal */
+  --color-accent: #14B8A6;
+  --color-accent-foreground: #FFFFFF;
+
+  /* Semantic */
+  --color-success: #16A34A;
+  --color-success-foreground: #FFFFFF;
+  --color-destructive: #DC2626;
+  --color-destructive-foreground: #FFFFFF;
+
+  /* Neutrals */
+  --color-muted: #E2E8E6;
+  --color-muted-foreground: #4A5E5B;
+  --color-border: #D1D8D4;
+  --color-input: #D1D8D4;
+  --color-ring: #0D9488;
+
+  /* Glass surface */
+  --color-glass: rgba(255, 255, 255, 0.78);
+  --color-glass-strong: rgba(255, 255, 255, 0.92);
+  --color-glass-border: rgba(255, 255, 255, 0.35);
+
+  /* Radii */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
+
+  /* Typography */
+  --font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   GRADIENT SYSTEM
+   ═══════════════════════════════════════════════ */
+
+.gradient-hero {
+  background: linear-gradient(135deg, #0D1F1D 0%, #0F766E 35%, #0D9488 70%, #14B8A6 100%);
+}
+
+.gradient-hero-deep {
+  background: linear-gradient(160deg, #0D1F1D 0%, #0D3B38 35%, #0F766E 65%, #0D9488 100%);
+}
+
+.gradient-nav {
+  background: linear-gradient(90deg, #0D1F1D 0%, #0F3A35 50%, #0F766E 100%);
+}
+
+.gradient-sidebar {
+  background: linear-gradient(180deg, #0D1F1D 0%, #0F3A35 60%, #0F766E 100%);
+}
+
+.gradient-card-accent {
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.06) 0%, rgba(20, 184, 166, 0.04) 100%);
+}
+
+.gradient-auth {
+  background: linear-gradient(170deg, #0D1F1D 0%, #0F766E 30%, #0D9488 65%, #B7BDA9 100%);
+}
+
+/* ═══════════════════════════════════════════════
+   GLASS MORPHISM
+   ═══════════════════════════════════════════════ */
+
+.glass {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.glass-dark {
+  background: rgba(13, 31, 29, 0.28);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* ═══════════════════════════════════════════════
+   ENHANCED CARDS
+   ═══════════════════════════════════════════════ */
+
+.card-elevated {
+  background: #FFFFFF;
+  border: 1px solid rgba(209, 216, 212, 0.6);
+  box-shadow:
+    0 1px 3px rgba(13, 31, 29, 0.04),
+    0 4px 16px rgba(13, 31, 29, 0.04);
+  border-radius: 1.125rem;
+}
+
+.card-elevated:hover {
+  border-color: rgba(13, 148, 136, 0.25);
+  box-shadow:
+    0 2px 8px rgba(13, 31, 29, 0.06),
+    0 8px 24px rgba(13, 31, 29, 0.05);
+}
+
+.card-glow {
+  background: #FFFFFF;
+  border: 1px solid rgba(209, 216, 212, 0.5);
+  box-shadow:
+    0 1px 3px rgba(13, 31, 29, 0.04),
+    0 0 0 1px rgba(13, 148, 136, 0.06);
+  border-radius: 1.125rem;
+  transition: all 0.2s ease;
+}
+
+.card-glow:hover {
+  box-shadow:
+    0 4px 16px rgba(13, 148, 136, 0.12),
+    0 0 0 1px rgba(13, 148, 136, 0.12);
+}
+
+/* ═══════════════════════════════════════════════
+   BADGES & LABELS
+   ═══════════════════════════════════════════════ */
+
+.label-overline {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #4A5E5B;
+}
+
+.stat-value {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #0D9488;
+}
+
+/* ═══════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════ */
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-down-enter-active { animation: slideDown 0.25s ease-out; }
+.slide-down-leave-active { animation: slideDown 0.2s ease-in reverse; }
+
+@keyframes slideDown {
+  from { opacity: 0; max-height: 0; transform: translateY(-8px); }
+  to   { opacity: 1; max-height: 500px; transform: translateY(0); }
+}
