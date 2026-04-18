@@ -4,7 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { logPhiAccess } from '@/lib/audit'
-import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles, Trash2 } from 'lucide-vue-next'
+import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles, Trash2, Plus, Pencil, X, Check } from 'lucide-vue-next'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
 
 const router = useRouter()
@@ -39,6 +39,70 @@ const generatingBrief = ref(false)
 // Delete client
 const showDeleteConfirm = ref(false)
 const deleting = ref(false)
+
+// Session cycle management
+const showNewCycleForm = ref(false)
+const savingCycle = ref(false)
+const editingCycleId = ref<string | null>(null)
+const newCycle = ref({ session_date: '', next_session_date: '' })
+const editCycle = ref({ session_date: '', next_session_date: '', status: 'active' })
+
+function startEdit(cycle: Record<string, unknown>) {
+  editingCycleId.value = cycle.id as string
+  editCycle.value = {
+    session_date: (cycle.session_date as string) ?? '',
+    next_session_date: (cycle.next_session_date as string) ?? '',
+    status: (cycle.status as string) ?? 'active',
+  }
+}
+
+function cancelEdit() {
+  editingCycleId.value = null
+}
+
+async function createCycle() {
+  savingCycle.value = true
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not authenticated')
+    const { error } = await supabase.from('session_cycles').insert({
+      client_id: clientId,
+      therapist_id: user.id,
+      session_date: newCycle.value.session_date || null,
+      next_session_date: newCycle.value.next_session_date || null,
+      status: 'active',
+    })
+    if (error) throw error
+    newCycle.value = { session_date: '', next_session_date: '' }
+    showNewCycleForm.value = false
+    await loadSessionHistory()
+  } catch (e) {
+    console.error('Create cycle error:', e)
+  } finally {
+    savingCycle.value = false
+  }
+}
+
+async function saveCycleEdit(cycleId: string) {
+  savingCycle.value = true
+  try {
+    const { error } = await supabase
+      .from('session_cycles')
+      .update({
+        session_date: editCycle.value.session_date || null,
+        next_session_date: editCycle.value.next_session_date || null,
+        status: editCycle.value.status,
+      })
+      .eq('id', cycleId)
+    if (error) throw error
+    editingCycleId.value = null
+    await loadSessionHistory()
+  } catch (e) {
+    console.error('Update cycle error:', e)
+  } finally {
+    savingCycle.value = false
+  }
+}
 
 async function deleteClient() {
   deleting.value = true
@@ -379,45 +443,178 @@ const activeCycle = computed(() =>
 
       <!-- ── TAB 3: SESSION HISTORY ── -->
       <div v-else-if="activeTab === 'history'">
-        <div v-if="sessionHistory.length === 0" class="text-sm text-gray-400 py-8 text-center">No session history yet.</div>
-        <div v-else class="space-y-2">
+
+        <!-- Header row -->
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-sm text-gray-500">Manage session cycles and scheduled dates</p>
+          </div>
+          <button
+            @click="showNewCycleForm = !showNewCycleForm"
+            class="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+          >
+            <Plus class="w-4 h-4" />
+            Schedule Session
+          </button>
+        </div>
+
+        <!-- New cycle form -->
+        <div v-if="showNewCycleForm" class="bg-teal-50 border border-teal-200 rounded-xl p-5 mb-4">
+          <p class="text-sm font-semibold text-teal-800 mb-4">New Session Cycle</p>
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Session date</label>
+              <input
+                v-model="newCycle.session_date"
+                type="date"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+              <p class="text-xs text-gray-400 mt-1">When did / will the session happen?</p>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Next session date</label>
+              <input
+                v-model="newCycle.next_session_date"
+                type="date"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+              <p class="text-xs text-gray-400 mt-1">Shows in client's app as upcoming session</p>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button
+              @click="createCycle"
+              :disabled="savingCycle"
+              class="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <span v-if="savingCycle" class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              <Check v-else class="w-3.5 h-3.5" />
+              {{ savingCycle ? 'Saving…' : 'Create Cycle' }}
+            </button>
+            <button
+              @click="showNewCycleForm = false"
+              class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-4 py-2 rounded-lg transition-colors"
+            >
+              <X class="w-3.5 h-3.5" />
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div v-if="sessionHistory.length === 0" class="text-center py-12 text-gray-400">
+          <p class="text-sm font-medium mb-1">No sessions scheduled yet</p>
+          <p class="text-xs">Click "Schedule Session" to create the first cycle.</p>
+        </div>
+
+        <!-- Cycle list -->
+        <div v-else class="space-y-3">
           <div
             v-for="cycle in sessionHistory"
             :key="cycle.id as string"
-            class="bg-white border border-gray-200 rounded-xl overflow-hidden"
+            class="bg-white border rounded-xl overflow-hidden"
+            :class="cycle.status === 'active' ? 'border-teal-200' : 'border-gray-200'"
           >
-            <button
-              @click="toggleCycle(cycle.id as string)"
-              class="w-full flex items-center justify-between px-5 py-4 text-left"
-            >
-              <div class="flex items-center gap-4">
-                <span class="text-sm font-medium text-gray-900">
-                  Session — {{ cycle.session_date ? formatDate(cycle.session_date as string) : 'No date' }}
-                </span>
-                <span
-                  class="text-xs px-2 py-0.5 rounded-full font-medium"
-                  :class="cycle.status === 'active'
-                    ? 'bg-teal-50 text-teal-700 border border-teal-200'
-                    : 'bg-gray-100 text-gray-500'"
-                >
-                  {{ cycle.status }}
-                </span>
-              </div>
-              <ChevronDown v-if="!expandedCycles.has(cycle.id as string)" class="w-4 h-4 text-gray-400" />
-              <ChevronUp v-else class="w-4 h-4 text-gray-400" />
-            </button>
+            <!-- View mode -->
+            <div v-if="editingCycleId !== cycle.id" class="px-5 py-4">
+              <div class="flex items-start justify-between">
+                <div class="space-y-2">
+                  <!-- Status badge -->
+                  <span
+                    class="inline-flex text-xs px-2.5 py-0.5 rounded-full font-medium"
+                    :class="cycle.status === 'active'
+                      ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                      : 'bg-gray-100 text-gray-500'"
+                  >
+                    {{ cycle.status === 'active' ? 'Active cycle' : 'Closed' }}
+                  </span>
 
-            <div v-if="expandedCycles.has(cycle.id as string)" class="px-5 pb-5 border-t border-gray-100 pt-4 space-y-3">
-              <div class="text-sm text-gray-500">
-                <span class="font-medium text-gray-700">Next session: </span>
-                {{ cycle.next_session_date ? formatDate(cycle.next_session_date as string) : '—' }}
-              </div>
-              <div v-if="(cycle.presession_briefs as unknown[])?.length > 0">
+                  <!-- Dates -->
+                  <div class="flex items-center gap-6 text-sm">
+                    <div>
+                      <span class="text-xs text-gray-400 block mb-0.5">Session date</span>
+                      <span class="font-medium text-gray-900">
+                        {{ cycle.session_date ? formatDate(cycle.session_date as string) : '—' }}
+                      </span>
+                    </div>
+                    <div class="text-gray-300">→</div>
+                    <div>
+                      <span class="text-xs text-gray-400 block mb-0.5">Next session</span>
+                      <span class="font-medium text-gray-900">
+                        {{ cycle.next_session_date ? formatDate(cycle.next_session_date as string) : '—' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Pre-session brief link -->
+                  <div v-if="(cycle.presession_briefs as unknown[])?.length > 0">
+                    <button
+                      @click="router.push({ name: 'presession-brief', params: { clientId }, query: { briefId: String(((cycle.presession_briefs as Record<string, unknown>[])[0]).id) } })"
+                      class="text-xs text-teal-600 hover:text-teal-700 font-medium"
+                    >
+                      View pre-session brief →
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Edit button -->
                 <button
-                  @click="router.push({ name: 'presession-brief', params: { clientId }, query: { briefId: String(((cycle.presession_briefs as Record<string, unknown>[])[0]).id) } })"
-                  class="text-sm text-teal-600 hover:text-teal-700 font-medium"
+                  @click="startEdit(cycle)"
+                  class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
                 >
-                  View pre-session brief →
+                  <Pencil class="w-3 h-3" />
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            <!-- Edit mode -->
+            <div v-else class="px-5 py-4 bg-gray-50">
+              <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Editing cycle</p>
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Session date</label>
+                  <input
+                    v-model="editCycle.session_date"
+                    type="date"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Next session date</label>
+                  <input
+                    v-model="editCycle.next_session_date"
+                    type="date"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                  />
+                </div>
+              </div>
+              <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                <select
+                  v-model="editCycle.status"
+                  class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                >
+                  <option value="active">Active</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  @click="saveCycleEdit(cycle.id as string)"
+                  :disabled="savingCycle"
+                  class="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                >
+                  <span v-if="savingCycle" class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <Check v-else class="w-3.5 h-3.5" />
+                  {{ savingCycle ? 'Saving…' : 'Save Changes' }}
+                </button>
+                <button
+                  @click="cancelEdit"
+                  class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-4 py-2 rounded-lg transition-colors"
+                >
+                  <X class="w-3.5 h-3.5" />
+                  Cancel
                 </button>
               </div>
             </div>
