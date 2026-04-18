@@ -5,13 +5,12 @@ import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { logPhiAccess } from '@/lib/audit'
 import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles } from 'lucide-vue-next'
-import { MOCK_CLIENTS } from '@/data/mockClients'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
 
 const router = useRouter()
 const route = useRoute()
 const clientId = route.params.clientId as string
-const client = MOCK_CLIENTS.find(c => c.id === clientId)
+const clientName = ref<string>('Client')
 
 const activeTab = ref<'overview' | 'logs' | 'history'>('overview')
 
@@ -38,6 +37,13 @@ const expandedCycles = ref<Set<string>>(new Set())
 const generatingBrief = ref(false)
 
 onMounted(async () => {
+  const { data: clientRow } = await supabase
+    .from('clients')
+    .select('name')
+    .eq('id', clientId)
+    .single()
+  if (clientRow) clientName.value = clientRow.name
+
   await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory()])
 })
 
@@ -160,7 +166,7 @@ const activeCycle = computed(() =>
       <!-- Header -->
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h1 class="text-xl font-semibold text-gray-900">{{ client?.name ?? 'Client' }}</h1>
+          <h1 class="text-xl font-semibold text-gray-900">{{ clientName }}</h1>
           <p class="text-sm text-gray-500 mt-0.5">Client detail</p>
         </div>
         <button
