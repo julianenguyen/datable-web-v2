@@ -4,7 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { logPhiAccess } from '@/lib/audit'
-import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles } from 'lucide-vue-next'
+import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles, Trash2 } from 'lucide-vue-next'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
 
 const router = useRouter()
@@ -35,6 +35,26 @@ const expandedCycles = ref<Set<string>>(new Set())
 
 // Brief generation
 const generatingBrief = ref(false)
+
+// Delete client
+const showDeleteConfirm = ref(false)
+const deleting = ref(false)
+
+async function deleteClient() {
+  deleting.value = true
+  try {
+    const { error } = await supabase
+      .from('clients')
+      .delete()
+      .eq('id', clientId)
+    if (error) throw error
+    router.push('/')
+  } catch (e) {
+    console.error('Delete error:', e)
+    deleting.value = false
+    showDeleteConfirm.value = false
+  }
+}
 
 onMounted(async () => {
   const { data: clientRow } = await supabase
@@ -169,13 +189,50 @@ const activeCycle = computed(() =>
           <h1 class="text-xl font-semibold text-gray-900">{{ clientName }}</h1>
           <p class="text-sm text-gray-500 mt-0.5">Client detail</p>
         </div>
-        <button
-          @click="router.push({ name: 'session-summary', params: { clientId } })"
-          class="text-sm font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 px-4 py-2 rounded-lg transition-colors"
-        >
-          New Session Summary
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            @click="showDeleteConfirm = true"
+            class="flex items-center gap-1.5 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
+          >
+            <Trash2 class="w-4 h-4" />
+            Remove Client
+          </button>
+          <button
+            @click="router.push({ name: 'session-summary', params: { clientId } })"
+            class="text-sm font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 px-4 py-2 rounded-lg transition-colors"
+          >
+            New Session Summary
+          </button>
+        </div>
       </div>
+
+      <!-- Delete confirmation modal -->
+      <Teleport to="body">
+        <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/40" @click="showDeleteConfirm = false" />
+          <div class="relative bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+            <h2 class="text-base font-semibold text-gray-900 mb-2">Remove {{ clientName }}?</h2>
+            <p class="text-sm text-gray-500 mb-6">
+              This will permanently delete their account and all associated data — logs, check-ins, session history, and health data. This cannot be undone.
+            </p>
+            <div class="flex gap-3">
+              <button
+                @click="showDeleteConfirm = false"
+                class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                @click="deleteClient"
+                :disabled="deleting"
+                class="flex-1 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
+              >
+                {{ deleting ? 'Removing…' : 'Yes, Remove' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- Tabs -->
       <div class="flex gap-0 border-b border-gray-200 mb-6">
