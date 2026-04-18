@@ -219,7 +219,8 @@ function openClientDetail(clientId: string) {
         <div
           v-for="client in sortedClients"
           :key="client.id"
-          class="bg-white border rounded-xl transition-all"
+          @click="openClientDetail(client.id)"
+          class="bg-white border rounded-xl transition-all cursor-pointer hover:shadow-md hover:border-teal-200"
           :class="client.isFlagged ? 'border-red-200 shadow-sm' : 'border-gray-200'"
         >
           <div class="flex items-center gap-4 px-5 py-4">
@@ -229,12 +230,7 @@ function openClientDetail(clientId: string) {
             <!-- Client info -->
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
-                <button
-                  @click="openClientDetail(client.id)"
-                  class="text-sm font-semibold text-gray-900 hover:text-teal-700 transition-colors"
-                >
-                  {{ client.name }}
-                </button>
+                <span class="text-sm font-semibold text-gray-900">{{ client.name }}</span>
                 <span
                   v-if="client.status === 'pending'"
                   class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
@@ -276,17 +272,12 @@ function openClientDetail(clientId: string) {
             <div class="flex items-center gap-2 shrink-0">
               <button
                 v-if="client.status === 'active'"
-                @click="openNewSessionSummary(client.id, client.cycleId)"
+                @click.stop="openNewSessionSummary(client.id, client.cycleId)"
                 class="text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg transition-colors"
               >
                 New Session Summary
               </button>
-              <button
-                @click="openClientDetail(client.id)"
-                class="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <ChevronRight class="w-5 h-5" />
-              </button>
+              <ChevronRight class="w-5 h-5 text-gray-400" />
             </div>
           </div>
         </div>
