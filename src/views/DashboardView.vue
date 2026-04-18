@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { AlertTriangle, Clock, CheckCircle2, Plus, FileText, ChevronRight } from 'lucide-vue-next'
@@ -19,12 +19,17 @@ interface ClientCard {
 }
 
 const router = useRouter()
+const route = useRoute()
 const search = ref('')
 const clients = ref<ClientCard[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 
+// Reload every time this view is navigated to (e.g. after adding a client)
 onMounted(loadClients)
+watch(() => route.fullPath, () => {
+  if (route.path === '/') loadClients()
+})
 
 async function loadClients() {
   loading.value = true

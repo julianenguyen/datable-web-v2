@@ -13,6 +13,8 @@ const phone = ref('')
 const loading = ref(false)
 const error = ref('')
 const success = ref(false)
+const inviteLink = ref('')
+const deliveryWarning = ref('')
 
 async function handleInvite() {
   if (!name.value.trim()) {
@@ -26,7 +28,7 @@ async function handleInvite() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Not authenticated.')
 
-    // Create client record with pending status
+    // Create client record — this must succeed before anything else
     const { error: clientError } = await supabase
       .from('clients')
       .insert({
@@ -39,16 +41,24 @@ async function handleInvite() {
 
     if (clientError) throw clientError
 
-    // Trigger invite SMS/email via edge function
-    await supabase.functions.invoke('send-client-invite', {
-      body: {
-        name: name.value.trim(),
-        email: email.value.trim() || null,
-        phone: phone.value.trim() || null,
-      },
-    })
+    // Try to send invite — failure here is non-fatal, client is already in DB
+    try {
+      const { data } = await supabase.functions.invoke('send-client-invite', {
+        body: {
+          name: name.value.trim(),
+          email: email.value.trim() || null,
+          phone: phone.value.trim() || null,
+        },
+      })
+      if (data?.inviteLink) inviteLink.value = data.inviteLink
+    } catch {
+      deliveryWarning.value = 'Client added but invite delivery failed. Share the link below manually.'
+    }
 
     success.value = true
+
+    // Auto-navigate back to roster after 3s so the new client is visible
+    setTimeout(() => router.push('/'), 3000)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
   } finally {
@@ -76,17 +86,42 @@ async function handleInvite() {
       </div>
 
       <!-- Success state -->
-      <div v-if="success" class="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
-        <CheckCircle2 class="w-10 h-10 text-green-500 mx-auto mb-3" />
-        <h2 class="text-base font-semibold text-gray-900 mb-1">Invite sent!</h2>
-        <p class="text-sm text-gray-600 mb-4">
-          {{ name }} will receive a link to join Datable. Their status will show as "Invite pending" until they complete onboarding.
-        </p>
+      <div v-if="success" class="space-y-3">
+        <div class="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+          <CheckCircle2 class="w-10 h-10 text-green-500 mx-auto mb-3" />
+          <h2 class="text-base font-semibold text-gray-900 mb-1">{{ name }} added!</h2>
+          <p class="text-sm text-gray-600 mb-1">
+            They'll appear as "Invite pending" on your roster until they complete onboarding.
+          </p>
+          <p class="text-xs text-gray-400">Returning to roster in a moment…</p>
+        </div>
+
+        <!-- Delivery warning -->
+        <div v-if="deliveryWarning" class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
+          {{ deliveryWarning }}
+        </div>
+
+        <!-- Invite link to copy manually -->
+        <div v-if="inviteLink" class="bg-white border border-gray-200 rounded-xl p-4">
+          <p class="text-xs font-medium text-gray-500 mb-2">Invite link — share directly if needed</p>
+          <div class="flex items-center gap-2">
+            <code class="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 truncate">
+              {{ inviteLink }}
+            </code>
+            <button
+              @click="() => { navigator.clipboard.writeText(inviteLink); }"
+              class="text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-2 rounded-lg transition-colors shrink-0"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+
         <button
           @click="router.push('/')"
-          class="text-sm font-medium text-teal-600 hover:text-teal-700"
+          class="w-full text-sm font-medium text-teal-600 hover:text-teal-700 py-2"
         >
-          Back to roster →
+          Go to roster now →
         </button>
       </div>
 
