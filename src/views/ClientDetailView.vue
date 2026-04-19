@@ -298,19 +298,19 @@ const activeCycle = computed(() =>
           <div class="relative bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
 
             <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                <Trash2 class="w-5 h-5 text-amber-600" />
+              <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                <Trash2 class="w-5 h-5 text-gray-500" />
               </div>
               <div>
                 <h2 class="text-base font-semibold text-gray-900">Archive {{ clientName }}?</h2>
-                <p class="text-xs text-gray-400 mt-0.5">Their data is never deleted</p>
+                <p class="text-xs text-gray-400 mt-0.5">This disconnects the relationship — it does not delete anything</p>
               </div>
             </div>
 
             <!-- State A: not yet activated -->
             <template v-if="!clientActivated">
               <p class="text-sm text-gray-500 mb-6 leading-relaxed">
-                This client hasn't activated their account yet. Archiving them will remove them from your active roster and revoke their invite. You can restore them at any time.
+                This client hasn't activated their account yet, so archiving them simply revokes their pending invite and removes them from your roster. You can re-invite them at any time.
               </p>
               <div class="flex gap-3">
                 <button
@@ -332,9 +332,27 @@ const activeCycle = computed(() =>
 
             <!-- State B: activated — must type name -->
             <template v-else>
-              <p class="text-sm text-gray-500 mb-4 leading-relaxed">
-                {{ clientName }} will be moved to your archive. All logs, session history, and health data are preserved — nothing is deleted. You can restore them to your active roster at any time.
-              </p>
+              <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 space-y-2">
+                <p class="text-xs font-semibold text-gray-700 uppercase tracking-wide">What happens when you archive</p>
+                <ul class="space-y-1.5">
+                  <li class="flex items-start gap-2 text-xs text-gray-500">
+                    <span class="text-green-500 mt-0.5 shrink-0">✓</span>
+                    <span><span class="font-medium text-gray-700">{{ clientName }} keeps full app access</span> — their account, all past logs, and health data remain intact.</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-gray-500">
+                    <span class="text-green-500 mt-0.5 shrink-0">✓</span>
+                    <span>They can continue using Datable independently.</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-gray-500">
+                    <span class="text-gray-400 mt-0.5 shrink-0">–</span>
+                    <span>You will <span class="font-medium text-gray-700">no longer see their new activity</span> or receive real-time data.</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-gray-500">
+                    <span class="text-gray-400 mt-0.5 shrink-0">–</span>
+                    <span>They will <span class="font-medium text-gray-700">no longer receive check-ins or action plans</span> from you.</span>
+                  </li>
+                </ul>
+              </div>
               <div class="mb-4">
                 <label class="block text-xs font-medium text-gray-600 mb-1.5">
                   Type <span class="font-semibold text-gray-900">{{ clientName }}</span> to confirm
@@ -707,7 +725,9 @@ const activeCycle = computed(() =>
         <div v-if="clientStatus === 'archived'" class="px-5 py-4 bg-white flex items-center justify-between gap-4">
           <div>
             <p class="text-sm font-medium text-gray-900">This client is archived</p>
-            <p class="text-xs text-gray-500 mt-0.5">All historical data is preserved. Restore them to make them active again.</p>
+            <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">
+              They still have full access to their Datable app and all historical data. You're just disconnected — no new activity will appear here. Restore to resume the relationship.
+            </p>
           </div>
           <button
             @click="confirmUnarchive"
@@ -726,8 +746,8 @@ const activeCycle = computed(() =>
         <div v-else class="px-5 py-4 bg-white flex items-center justify-between gap-4">
           <div>
             <p class="text-sm font-medium text-gray-900">Archive this client</p>
-            <p class="text-xs text-gray-500 mt-0.5">
-              Moves {{ clientName }} to your archive. All logs, sessions, and health data are preserved — nothing is ever deleted. You can restore them at any time.
+            <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">
+              Disconnects the provider relationship — {{ clientName }} keeps their app access and all data, but you'll stop receiving their activity and they'll stop receiving check-ins from you. Reversible at any time.
             </p>
           </div>
           <button
