@@ -91,7 +91,7 @@ async function handleSignup() {
   <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-start py-12 px-4">
     <!-- Logo -->
     <div class="text-center mb-8">
-      <img src="/logo-primary.png" alt="Datable Health" class="h-8 mx-auto mb-4" />
+      <img src="/logo-white.png" alt="Datable Health" class="h-8 mx-auto mb-4 logo-teal" />
       <h1 class="text-xl font-semibold text-gray-900">Create your provider account</h1>
       <p class="text-sm text-gray-500 mt-1">Start your 30-day free trial — no credit card required today</p>
     </div>

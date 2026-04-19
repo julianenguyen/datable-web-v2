@@ -11,7 +11,7 @@ const stepLabels = ['Account', 'Practice', 'Clinician', 'Insurance', 'BAA', 'Bil
 <template>
   <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-start py-12 px-4">
     <!-- Logo -->
-    <img src="/logo-primary.png" alt="Datable Health" class="h-8" />
+    <img src="/logo-white.png" alt="Datable Health" class="h-8 logo-teal" />
 
     <!-- Step progress indicator -->
     <div class="flex items-center gap-0 mt-8">

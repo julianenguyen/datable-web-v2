@@ -11,6 +11,13 @@ const practiceName = ref('Your Practice')
 const countdown = ref(5)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
+function stopCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+}
+
 onMounted(async () => {
   // Mark onboarding complete in the DB — must happen here, not in BillingView,
   // because calling complete() there sets completed_at before this navigation
@@ -70,7 +77,7 @@ const workflowSteps = [
 <template>
   <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6 py-12">
     <!-- Logo -->
-    <img src="/logo-primary.png" alt="Datable Health" class="h-8 mb-10" />
+    <img src="/logo-white.png" alt="Datable Health" class="h-8 mb-10 logo-teal" />
 
     <!-- Main content -->
     <div class="text-center max-w-xl w-full">
@@ -102,6 +109,7 @@ const workflowSteps = [
       <div class="mt-8 flex flex-col items-center gap-3">
         <router-link
           to="/invite"
+          @click="stopCountdown()"
           class="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-8 py-3 rounded-xl transition-colors shadow-sm"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -111,7 +119,7 @@ const workflowSteps = [
         </router-link>
 
         <button
-          @click="router.push('/')"
+          @click="stopCountdown(); router.push('/')"
           class="text-sm text-gray-400 hover:text-gray-600 transition-colors"
         >
           Go to dashboard

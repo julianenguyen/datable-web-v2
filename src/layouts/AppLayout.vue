@@ -18,7 +18,7 @@ async function handleSignOut() {
     <aside class="w-56 bg-white border-r border-gray-200 flex flex-col fixed inset-y-0 left-0 z-10">
       <!-- Logo -->
       <div class="h-14 flex items-center px-5 border-b border-gray-100">
-        <img src="/logo-primary.png" alt="Datable Health" class="h-7" />
+        <img src="/logo-white.png" alt="Datable Health" class="h-7 logo-teal" />
       </div>
 
       <!-- Nav -->
