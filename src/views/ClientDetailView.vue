@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
@@ -153,6 +153,25 @@ onMounted(async () => {
   }
 
   await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory()])
+
+  // Real-time: reload logs whenever the patient submits or updates a daily log
+  realtimeChannel = supabase
+    .channel(`daily_logs:client:${clientId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'daily_logs', filter: `client_id=eq.${clientId}` },
+      () => { loadLogs() }
+    )
+    .subscribe()
+})
+
+let realtimeChannel: ReturnType<typeof supabase.channel> | null = null
+
+onUnmounted(() => {
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel)
+    realtimeChannel = null
+  }
 })
 
 async function loadLogs() {
@@ -162,7 +181,7 @@ async function loadLogs() {
     .select('*')
     .eq('client_id', clientId)
     .order('log_date', { ascending: false })
-    .limit(30)
+    .limit(90)
 
   logs.value = data ?? []
   logPhiAccess(clientId, 'daily_log', 'read')
