@@ -77,7 +77,7 @@ const workflowSteps = [
 <template>
   <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6 py-12">
     <!-- Logo -->
-    <img src="/logo-white.png" alt="Datable Health" class="h-8 mb-10 logo-teal" />
+    <img src="/logo-teal.png" alt="Datable Health" class="h-8 mb-10" />
 
     <!-- Main content -->
     <div class="text-center max-w-xl w-full">
