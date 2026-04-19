@@ -270,13 +270,6 @@ const activeCycle = computed(() =>
         </div>
         <div class="flex items-center gap-2">
           <button
-            @click="showRemoveModal = true; removeNameInput = ''; removeError = null"
-            class="flex items-center gap-1.5 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
-          >
-            <Trash2 class="w-4 h-4" />
-            Remove Client
-          </button>
-          <button
             @click="router.push({ name: 'session-summary', params: { clientId } })"
             class="text-sm font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 px-4 py-2 rounded-lg transition-colors"
           >
