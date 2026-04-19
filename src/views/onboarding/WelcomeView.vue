@@ -12,6 +12,11 @@ const countdown = ref(5)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
+  // Mark onboarding complete in the DB — must happen here, not in BillingView,
+  // because calling complete() there sets completed_at before this navigation
+  // occurs and the router guard immediately redirects away from /onboarding/welcome.
+  await onboarding.complete()
+
   if (onboarding.practiceId) {
     const { data } = await supabase
       .from('practices')

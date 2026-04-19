@@ -39,7 +39,10 @@ async function handleSkip() {
     if (practiceErr) throw practiceErr
 
     await onboarding.markStep('step_trial_activated')
-    await onboarding.complete()
+    // Do NOT call complete() here — WelcomeView calls it.
+    // Calling it here sets completed_at before navigation, causing the router
+    // guard to redirect away from /onboarding/welcome (since currentStepRoute
+    // becomes '/') and the welcome screen is never shown.
     router.push('/onboarding/welcome')
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Something went wrong. Please try again.'

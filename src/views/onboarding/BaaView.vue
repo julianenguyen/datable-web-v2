@@ -41,7 +41,11 @@ const isValid = computed(() => {
 })
 
 async function handleAccept() {
-  if (!isValid.value || !auth.user || !onboarding.practiceId || !onboarding.clinicianId) return
+  // Note: onboarding.clinicianId is intentionally NOT checked here.
+  // Pinia state is in-memory only — clinicianId is null after a page refresh.
+  // auth.user.id IS the clinician ID (set during ClinicianProfileView insert),
+  // and auth.user is always available from the Supabase session.
+  if (!isValid.value || !auth.user || !onboarding.practiceId) return
   error.value = ''
   loading.value = true
   try {
