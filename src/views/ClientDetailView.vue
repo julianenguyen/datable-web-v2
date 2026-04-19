@@ -36,12 +36,14 @@ const expandedCycles = ref<Set<string>>(new Set())
 // Brief generation
 const generatingBrief = ref(false)
 
-// Remove client (soft delete)
+// Archive / unarchive
+const clientStatus = ref<string>('active') // 'active' | 'pending' | 'archived'
 const clientActivated = ref(false) // true if invite_used_at is set
-const showRemoveModal = ref(false)
-const removeNameInput = ref('')
-const removing = ref(false)
-const removeError = ref<string | null>(null)
+const showArchiveModal = ref(false)
+const archiveNameInput = ref('')
+const archiving = ref(false)
+const archiveError = ref<string | null>(null)
+const unarchiving = ref(false)
 
 // Session cycle management
 const showNewCycleForm = ref(false)
@@ -107,39 +109,50 @@ async function saveCycleEdit(cycleId: string) {
   }
 }
 
-async function confirmRemove() {
-  // For activated clients, require the name to match exactly
-  if (clientActivated.value && removeNameInput.value.trim() !== clientName.value.trim()) {
-    removeError.value = 'Name does not match. Please type the client\'s full name.'
+async function confirmArchive() {
+  if (clientActivated.value && archiveNameInput.value.trim() !== clientName.value.trim()) {
+    archiveError.value = 'Name does not match. Please type the client\'s full name.'
     return
   }
-  removing.value = true
-  removeError.value = null
+  archiving.value = true
+  archiveError.value = null
   try {
     const { error } = await supabase.functions.invoke('remove-client', {
       body: { clientId },
     })
     if (error) throw error
-    // Navigate to roster with undo toast params
-    router.push({
-      path: '/',
-      query: { undoClientId: clientId, undoClientName: clientName.value },
-    })
+    router.push('/')
   } catch (e) {
-    console.error('[ClientDetail] remove error:', e)
-    removeError.value = 'Failed to remove client. Please try again.'
-    removing.value = false
+    console.error('[ClientDetail] archive error:', e)
+    archiveError.value = 'Failed to archive client. Please try again.'
+    archiving.value = false
+  }
+}
+
+async function confirmUnarchive() {
+  unarchiving.value = true
+  try {
+    const { error } = await supabase.functions.invoke('undo-remove-client', {
+      body: { clientId },
+    })
+    if (error) throw error
+    clientStatus.value = 'active'
+  } catch (e) {
+    console.error('[ClientDetail] unarchive error:', e)
+  } finally {
+    unarchiving.value = false
   }
 }
 
 onMounted(async () => {
   const { data: clientRow } = await supabase
     .from('clients')
-    .select('name, invite_used_at')
+    .select('name, status, invite_used_at')
     .eq('id', clientId)
     .single()
   if (clientRow) {
     clientName.value = clientRow.name
+    clientStatus.value = clientRow.status ?? 'active'
     clientActivated.value = !!clientRow.invite_used_at
   }
 
@@ -278,86 +291,79 @@ const activeCycle = computed(() =>
         </div>
       </div>
 
-      <!-- Remove client modal -->
+      <!-- Archive client modal -->
       <Teleport to="body">
-        <div v-if="showRemoveModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/40" @click="!removing && (showRemoveModal = false)" />
+        <div v-if="showArchiveModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/40" @click="!archiving && (showArchiveModal = false)" />
           <div class="relative bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
 
-            <!-- State A: not yet activated (invite pending) -->
-            <template v-if="!clientActivated">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                  <Trash2 class="w-5 h-5 text-red-600" />
-                </div>
-                <h2 class="text-base font-semibold text-gray-900">Remove {{ clientName }}?</h2>
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <Trash2 class="w-5 h-5 text-amber-600" />
               </div>
+              <div>
+                <h2 class="text-base font-semibold text-gray-900">Archive {{ clientName }}?</h2>
+                <p class="text-xs text-gray-400 mt-0.5">Their data is never deleted</p>
+              </div>
+            </div>
+
+            <!-- State A: not yet activated -->
+            <template v-if="!clientActivated">
               <p class="text-sm text-gray-500 mb-6 leading-relaxed">
-                This client hasn't activated their account yet. Removing them will revoke their invite and delete all associated data.
-                You'll have <span class="font-medium text-gray-700">24 hours</span> to undo this from the roster.
+                This client hasn't activated their account yet. Archiving them will remove them from your active roster and revoke their invite. You can restore them at any time.
               </p>
               <div class="flex gap-3">
                 <button
-                  @click="showRemoveModal = false"
-                  :disabled="removing"
+                  @click="showArchiveModal = false"
+                  :disabled="archiving"
                   class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  @click="confirmRemove"
-                  :disabled="removing"
-                  class="flex-1 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
+                  @click="confirmArchive"
+                  :disabled="archiving"
+                  class="flex-1 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
                 >
-                  {{ removing ? 'Removing…' : 'Remove Client' }}
+                  {{ archiving ? 'Archiving…' : 'Archive Client' }}
                 </button>
               </div>
             </template>
 
-            <!-- State B: activated account — must type client name -->
+            <!-- State B: activated — must type name -->
             <template v-else>
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                  <Trash2 class="w-5 h-5 text-red-600" />
-                </div>
-                <div>
-                  <h2 class="text-base font-semibold text-gray-900">Remove {{ clientName }}?</h2>
-                  <p class="text-xs text-gray-400 mt-0.5">This action requires confirmation</p>
-                </div>
-              </div>
               <p class="text-sm text-gray-500 mb-4 leading-relaxed">
-                Removing an active client will hide them from your roster and revoke their app access.
-                Their data is retained for <span class="font-medium text-gray-700">24 hours</span> — you can undo this from the roster page.
+                {{ clientName }} will be moved to your archive. All logs, session history, and health data are preserved — nothing is deleted. You can restore them to your active roster at any time.
               </p>
               <div class="mb-4">
                 <label class="block text-xs font-medium text-gray-600 mb-1.5">
                   Type <span class="font-semibold text-gray-900">{{ clientName }}</span> to confirm
                 </label>
                 <input
-                  v-model="removeNameInput"
+                  v-model="archiveNameInput"
                   type="text"
                   :placeholder="clientName"
                   autocomplete="off"
                   class="w-full px-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 transition-colors"
-                  :class="removeError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-red-400'"
-                  @keydown.enter="confirmRemove"
+                  :class="archiveError ? 'border-amber-400 focus:ring-amber-400' : 'border-gray-300 focus:ring-amber-400'"
+                  @keydown.enter="confirmArchive"
                 />
-                <p v-if="removeError" class="text-xs text-red-500 mt-1.5">{{ removeError }}</p>
+                <p v-if="archiveError" class="text-xs text-red-500 mt-1.5">{{ archiveError }}</p>
               </div>
               <div class="flex gap-3">
                 <button
-                  @click="showRemoveModal = false; removeNameInput = ''; removeError = null"
-                  :disabled="removing"
+                  @click="showArchiveModal = false; archiveNameInput = ''; archiveError = null"
+                  :disabled="archiving"
                   class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  @click="confirmRemove"
-                  :disabled="removing || removeNameInput.trim() !== clientName.trim()"
-                  class="flex-1 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 py-2.5 rounded-xl transition-colors"
+                  @click="confirmArchive"
+                  :disabled="archiving || archiveNameInput.trim() !== clientName.trim()"
+                  class="flex-1 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 py-2.5 rounded-xl transition-colors"
                 >
-                  {{ removing ? 'Removing…' : 'Remove Client' }}
+                  {{ archiving ? 'Archiving…' : 'Archive Client' }}
                 </button>
               </div>
             </template>
@@ -689,24 +695,46 @@ const activeCycle = computed(() =>
           </div>
         </div>
       </div>
-      <!-- ── DANGER ZONE ── -->
-      <div class="mt-12 border border-red-200 rounded-xl overflow-hidden">
-        <div class="bg-red-50 px-5 py-3 border-b border-red-200">
-          <h2 class="text-sm font-semibold text-red-700">Danger Zone</h2>
+      <!-- ── ARCHIVE / RESTORE ZONE ── -->
+      <div class="mt-12 border rounded-xl overflow-hidden" :class="clientStatus === 'archived' ? 'border-teal-200' : 'border-gray-200'">
+        <div class="px-5 py-3 border-b" :class="clientStatus === 'archived' ? 'bg-teal-50 border-teal-200' : 'bg-gray-50 border-gray-200'">
+          <h2 class="text-sm font-semibold" :class="clientStatus === 'archived' ? 'text-teal-700' : 'text-gray-600'">
+            {{ clientStatus === 'archived' ? 'Archived Client' : 'Archive' }}
+          </h2>
         </div>
-        <div class="px-5 py-4 bg-white flex items-center justify-between gap-4">
+
+        <!-- Archived state -->
+        <div v-if="clientStatus === 'archived'" class="px-5 py-4 bg-white flex items-center justify-between gap-4">
           <div>
-            <p class="text-sm font-medium text-gray-900">Remove this client</p>
+            <p class="text-sm font-medium text-gray-900">This client is archived</p>
+            <p class="text-xs text-gray-500 mt-0.5">All historical data is preserved. Restore them to make them active again.</p>
+          </div>
+          <button
+            @click="confirmUnarchive"
+            :disabled="unarchiving"
+            class="shrink-0 flex items-center gap-1.5 text-sm font-medium text-teal-700 border border-teal-300 hover:bg-teal-50 disabled:opacity-60 px-4 py-2 rounded-lg transition-colors"
+          >
+            <svg v-if="unarchiving" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            {{ unarchiving ? 'Restoring…' : 'Restore to Active' }}
+          </button>
+        </div>
+
+        <!-- Active state -->
+        <div v-else class="px-5 py-4 bg-white flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-gray-900">Archive this client</p>
             <p class="text-xs text-gray-500 mt-0.5">
-              Removes {{ clientName }} from your roster.
-              {{ clientActivated ? 'Their data is retained for 24 hours and the action can be undone.' : 'Their invite will be revoked.' }}
+              Moves {{ clientName }} to your archive. All logs, sessions, and health data are preserved — nothing is ever deleted. You can restore them at any time.
             </p>
           </div>
           <button
-            @click="showRemoveModal = true; removeNameInput = ''; removeError = null"
-            class="shrink-0 text-sm font-medium text-red-600 border border-red-300 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors"
+            @click="showArchiveModal = true; archiveNameInput = ''; archiveError = null"
+            class="shrink-0 text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 px-4 py-2 rounded-lg transition-colors"
           >
-            Remove Client
+            Archive Client
           </button>
         </div>
       </div>

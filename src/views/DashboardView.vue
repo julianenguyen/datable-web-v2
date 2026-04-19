@@ -3,7 +3,7 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
-import { AlertTriangle, Clock, CheckCircle2, Plus, FileText, ChevronRight, RotateCcw } from 'lucide-vue-next'
+import { AlertTriangle, Clock, CheckCircle2, Plus, FileText, ChevronRight, ChevronDown, RotateCcw, Archive } from 'lucide-vue-next'
 
 interface ClientCard {
   id: string
@@ -18,88 +18,36 @@ interface ClientCard {
   cycleId: string | null
 }
 
+interface ArchivedClient {
+  id: string
+  name: string
+}
+
 const router = useRouter()
 const route = useRoute()
 const search = ref('')
 const clients = ref<ClientCard[]>([])
+const archivedClients = ref<ArchivedClient[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
+const showArchived = ref(false)
+const unarchivingId = ref<string | null>(null)
 
-// Undo toast state
-const undoClientId = ref<string | null>(null)
-const undoClientName = ref<string | null>(null)
-const undoing = ref(false)
-let undoTimer: ReturnType<typeof setTimeout> | null = null
-
-function showUndoToast(clientId: string, clientName: string) {
-  undoClientId.value = clientId
-  undoClientName.value = clientName
-  if (undoTimer) clearTimeout(undoTimer)
-  undoTimer = setTimeout(() => {
-    undoClientId.value = null
-    undoClientName.value = null
-  }, 8000)
-}
-
-function dismissUndoToast() {
-  if (undoTimer) clearTimeout(undoTimer)
-  undoClientId.value = null
-  undoClientName.value = null
-}
-
-async function undoRemove() {
-  if (!undoClientId.value) return
-  undoing.value = true
-  try {
-    const { error } = await supabase.functions.invoke('undo-remove-client', {
-      body: { clientId: undoClientId.value },
-    })
-    if (error) throw error
-    dismissUndoToast()
-    await loadClients()
-  } catch (e) {
-    console.error('[Dashboard] undo remove failed:', e)
-  } finally {
-    undoing.value = false
-  }
-}
-
-// Reload every time this view is navigated to (e.g. after adding a client)
-onMounted(() => {
-  loadClients()
-  // Check for undo params from remove-client navigation
-  const qClientId = route.query.undoClientId as string | undefined
-  const qClientName = route.query.undoClientName as string | undefined
-  if (qClientId && qClientName) {
-    showUndoToast(qClientId, qClientName)
-    // Clean up URL without re-navigating
-    router.replace({ path: '/' })
-  }
-})
+onMounted(loadClients)
 watch(() => route.fullPath, () => {
-  if (route.path === '/') {
-    loadClients()
-    const qClientId = route.query.undoClientId as string | undefined
-    const qClientName = route.query.undoClientName as string | undefined
-    if (qClientId && qClientName) {
-      showUndoToast(qClientId, qClientName)
-      router.replace({ path: '/' })
-    }
-  }
+  if (route.path === '/') loadClients()
 })
 
 async function loadClients() {
   loading.value = true
   loadError.value = null
 
-  // 1. All clients belonging to this therapist (exclude soft-deleted)
+  // Active + pending clients
   const { data: clientRows, error } = await supabase
     .from('clients')
     .select('id, name, status')
-    .is('removed_at', null)
+    .neq('status', 'archived')
     .order('name')
-
-  console.log('[Dashboard] clients query:', { clientRows, error })
 
   if (error) {
     loadError.value = `Failed to load clients: ${error.message}`
@@ -107,14 +55,23 @@ async function loadClients() {
     return
   }
 
+  // Archived clients (names only for the collapsed list)
+  const { data: archivedRows } = await supabase
+    .from('clients')
+    .select('id, name')
+    .eq('status', 'archived')
+    .order('name')
+
+  archivedClients.value = archivedRows ?? []
+
   if (!clientRows?.length) {
+    clients.value = []
     loading.value = false
     return
   }
 
   const clientIds = clientRows.map(c => c.id)
 
-  // 2. Active session cycles (for next session date + cycleId)
   const { data: cycles } = await supabase
     .from('session_cycles')
     .select('id, client_id, next_session_date')
@@ -124,7 +81,6 @@ async function loadClients() {
   const cycleMap: Record<string, { id: string; next_session_date: string | null }> = {}
   cycles?.forEach(cy => { cycleMap[cy.client_id] = cy })
 
-  // 3. Recent daily logs (last 30 days) — last log date, mood flags, 7-day count
   const since = new Date()
   since.setDate(since.getDate() - 30)
   const sinceDate = since.toISOString().split('T')[0]
@@ -136,7 +92,6 @@ async function loadClients() {
     .gte('log_date', sinceDate)
     .order('log_date', { ascending: false })
 
-  // Group logs by client
   const logsByClient: Record<string, Array<{ log_date: string; mood_score: number; is_flagged: boolean }>> = {}
   logs?.forEach(log => {
     if (!logsByClient[log.client_id]) logsByClient[log.client_id] = []
@@ -151,7 +106,7 @@ async function loadClients() {
   clients.value = clientRows.map(c => {
     const cycle = cycleMap[c.id] ?? null
     const clientLogs = logsByClient[c.id] ?? []
-    const lastLog = clientLogs[0] ?? null // sorted desc already
+    const lastLog = clientLogs[0] ?? null
 
     let daysLastLog: number | null = null
     if (lastLog) {
@@ -184,6 +139,21 @@ async function loadClients() {
   })
 
   loading.value = false
+}
+
+async function unarchiveClient(clientId: string) {
+  unarchivingId.value = clientId
+  try {
+    const { error } = await supabase.functions.invoke('undo-remove-client', {
+      body: { clientId },
+    })
+    if (error) throw error
+    await loadClients()
+  } catch (e) {
+    console.error('[Dashboard] unarchive failed:', e)
+  } finally {
+    unarchivingId.value = null
+  }
 }
 
 const activeCount = computed(() => clients.value.filter(c => c.status === 'active').length)
@@ -237,40 +207,6 @@ function openClientDetail(clientId: string) {
 
 <template>
   <AppLayout>
-    <!-- Undo toast -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition-all duration-300 ease-out"
-        enter-from-class="translate-y-full opacity-0"
-        enter-to-class="translate-y-0 opacity-100"
-        leave-active-class="transition-all duration-200 ease-in"
-        leave-from-class="translate-y-0 opacity-100"
-        leave-to-class="translate-y-full opacity-0"
-      >
-        <div
-          v-if="undoClientId"
-          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-gray-900 text-white text-sm px-5 py-3.5 rounded-2xl shadow-xl"
-        >
-          <span class="text-gray-300">
-            <span class="font-semibold text-white">{{ undoClientName }}</span> was removed from your roster.
-          </span>
-          <button
-            @click="undoRemove"
-            :disabled="undoing"
-            class="flex items-center gap-1.5 font-semibold text-teal-400 hover:text-teal-300 disabled:opacity-60 transition-colors shrink-0"
-          >
-            <RotateCcw class="w-3.5 h-3.5" />
-            {{ undoing ? 'Undoing…' : 'Undo' }}
-          </button>
-          <button @click="dismissUndoToast" class="text-gray-500 hover:text-gray-300 transition-colors ml-1">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </Transition>
-    </Teleport>
-
     <div class="flex-1 p-8">
       <!-- Header -->
       <div class="flex items-center justify-between mb-6">
@@ -311,7 +247,7 @@ function openClientDetail(clientId: string) {
         <span class="text-sm">Loading clients…</span>
       </div>
 
-      <!-- Client list -->
+      <!-- Active client list -->
       <div v-else class="space-y-2">
         <div
           v-for="client in sortedClients"
@@ -321,10 +257,8 @@ function openClientDetail(clientId: string) {
           :class="client.isFlagged ? 'border-red-200 shadow-sm' : 'border-gray-200'"
         >
           <div class="flex items-center gap-4 px-5 py-4">
-            <!-- Flag indicator -->
             <div class="shrink-0 w-1.5 self-stretch rounded-full" :class="client.isFlagged ? 'bg-red-400' : 'bg-transparent'" />
 
-            <!-- Client info -->
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-sm font-semibold text-gray-900">{{ client.name }}</span>
@@ -334,10 +268,7 @@ function openClientDetail(clientId: string) {
                 >
                   Invite pending
                 </span>
-                <span
-                  v-if="client.isFlagged"
-                  class="flex items-center gap-1 text-xs font-medium text-red-600"
-                >
+                <span v-if="client.isFlagged" class="flex items-center gap-1 text-xs font-medium text-red-600">
                   <AlertTriangle class="w-3.5 h-3.5" />
                   Flagged
                 </span>
@@ -345,8 +276,6 @@ function openClientDetail(clientId: string) {
               <p v-if="client.isFlagged && client.flagReason" class="text-xs text-red-500 mb-2">
                 {{ client.flagReason }}
               </p>
-
-              <!-- Stats row -->
               <div class="flex items-center gap-5 text-xs text-gray-500">
                 <div class="flex items-center gap-1.5">
                   <Clock class="w-3.5 h-3.5" />
@@ -365,7 +294,6 @@ function openClientDetail(clientId: string) {
               </div>
             </div>
 
-            <!-- Actions -->
             <div class="flex items-center gap-2 shrink-0">
               <button
                 v-if="client.status === 'active'"
@@ -380,11 +308,57 @@ function openClientDetail(clientId: string) {
         </div>
 
         <!-- Empty state -->
-        <div v-if="sortedClients.length === 0" class="text-center py-16 text-gray-400">
+        <div v-if="sortedClients.length === 0 && !loading" class="text-center py-16 text-gray-400">
           <p class="text-sm font-medium mb-1">No clients yet</p>
           <p class="text-xs">Invite a client to get started.</p>
         </div>
       </div>
+
+      <!-- Archived clients -->
+      <div v-if="!loading && archivedClients.length > 0" class="mt-10">
+        <button
+          @click="showArchived = !showArchived"
+          class="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors mb-3"
+        >
+          <Archive class="w-4 h-4" />
+          <span class="font-medium">Archived clients</span>
+          <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{{ archivedClients.length }}</span>
+          <ChevronDown
+            class="w-4 h-4 transition-transform duration-200"
+            :class="showArchived ? 'rotate-180' : ''"
+          />
+        </button>
+
+        <div v-if="showArchived" class="space-y-1.5">
+          <div
+            v-for="client in archivedClients"
+            :key="client.id"
+            class="bg-white border border-gray-200 rounded-xl px-5 py-3.5 flex items-center justify-between"
+          >
+            <div class="flex items-center gap-3">
+              <span class="text-sm font-medium text-gray-500">{{ client.name }}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-400 border border-gray-200">Archived</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                @click="openClientDetail(client.id)"
+                class="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                View history
+              </button>
+              <button
+                @click="unarchiveClient(client.id)"
+                :disabled="unarchivingId === client.id"
+                class="flex items-center gap-1.5 text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 disabled:opacity-60 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <RotateCcw class="w-3 h-3" />
+                {{ unarchivingId === client.id ? 'Restoring…' : 'Restore' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </AppLayout>
 </template>
