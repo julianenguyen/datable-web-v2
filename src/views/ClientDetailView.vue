@@ -443,7 +443,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
       <!-- Tabs -->
       <div class="flex gap-0 border-b border-gray-200 mb-6">
         <button
-          v-for="tab in [{ key: 'overview', label: 'Overview' }, { key: 'logs', label: 'Log Entries' }, { key: 'history', label: 'Session History' }]"
+          v-for="tab in [{ key: 'overview', label: 'Overview' }, { key: 'logs', label: 'Logged Entries' }, { key: 'history', label: 'Session History' }]"
           :key="tab.key"
           @click="activeTab = tab.key as 'overview' | 'logs' | 'history'"
           class="px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px"
@@ -483,6 +483,117 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
               <span class="text-xs font-medium text-gray-400 w-5 text-right shrink-0">{{ item.count }}</span>
             </div>
           </div>
+        </div>
+
+        <!-- Mood & Energy Trends -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-gray-900">Mood & Energy Trends</h2>
+            <div class="flex items-center gap-4 text-xs text-gray-500">
+              <span class="flex items-center gap-1.5">
+                <span class="inline-block w-3 h-0.5 rounded" style="background:#16796F" />
+                Mood
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="inline-block w-3 h-0.5 rounded" style="background:#2DD4BF" />
+                Energy
+              </span>
+            </div>
+          </div>
+          <div v-if="logsLoading" class="text-xs text-gray-400 py-4 text-center">Loading…</div>
+          <div v-else-if="logs.length === 0" class="text-xs text-gray-400">No log entries yet.</div>
+          <svg
+            v-else
+            :viewBox="`0 0 ${totalSVGWidth} ${totalSVGHeight}`"
+            class="w-full"
+            :style="`height: ${totalSVGHeight}px`"
+            @mouseleave="hoveredLogIndex = null"
+          >
+            <!-- Gridlines & Y-axis labels -->
+            <g v-for="tick in [0, 2, 4, 6, 8, 10]" :key="tick">
+              <line
+                :x1="CHART.PL" :y1="chartY(tick)"
+                :x2="CHART.PL + CHART.W" :y2="chartY(tick)"
+                stroke="#f3f4f6" stroke-width="1"
+              />
+              <text
+                :x="CHART.PL - 8" :y="chartY(tick) + 4"
+                text-anchor="end" font-size="10" fill="#9ca3af"
+              >{{ tick }}</text>
+            </g>
+            <!-- Energy line -->
+            <path
+              v-if="buildPath('energy_score')"
+              :d="buildPath('energy_score')"
+              fill="none" stroke="#2DD4BF" stroke-width="2"
+              stroke-linejoin="round" stroke-linecap="round"
+            />
+            <!-- Mood line -->
+            <path
+              v-if="buildPath('mood_score')"
+              :d="buildPath('mood_score')"
+              fill="none" stroke="#16796F" stroke-width="2"
+              stroke-linejoin="round" stroke-linecap="round"
+            />
+            <!-- Data points + hover targets -->
+            <g
+              v-for="(log, i) in chartLogs"
+              :key="log.id as string"
+              @mouseenter="hoveredLogIndex = i"
+            >
+              <rect :x="chartX(i) - 16" :y="CHART.PT" width="32" :height="CHART.H" fill="transparent" />
+              <line
+                v-if="hoveredLogIndex === i"
+                :x1="chartX(i)" :y1="CHART.PT"
+                :x2="chartX(i)" :y2="CHART.PT + CHART.H"
+                stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"
+              />
+              <circle
+                v-if="(log.mood_score as number | null) != null"
+                :cx="chartX(i)" :cy="chartY(log.mood_score as number)"
+                :r="hoveredLogIndex === i ? 5 : 3"
+                fill="#16796F" stroke="white" stroke-width="1.5"
+              />
+              <circle
+                v-if="(log.energy_score as number | null) != null"
+                :cx="chartX(i)" :cy="chartY(log.energy_score as number)"
+                :r="hoveredLogIndex === i ? 5 : 3"
+                fill="#2DD4BF" stroke="white" stroke-width="1.5"
+              />
+              <g v-if="hoveredLogIndex === i">
+                <rect
+                  :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80)"
+                  :y="CHART.PT - 2"
+                  width="80" height="48" rx="6" fill="#1f2937"
+                />
+                <text
+                  :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80) + 40"
+                  :y="CHART.PT + 12"
+                  text-anchor="middle" font-size="9" fill="#9ca3af"
+                >{{ formatShortDate(log.log_date as string) }}</text>
+                <text
+                  v-if="(log.mood_score as number | null) != null"
+                  :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80) + 40"
+                  :y="CHART.PT + 26"
+                  text-anchor="middle" font-size="10" fill="#5eead4"
+                >Mood {{ log.mood_score }}</text>
+                <text
+                  v-if="(log.energy_score as number | null) != null"
+                  :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80) + 40"
+                  :y="CHART.PT + 40"
+                  text-anchor="middle" font-size="10" fill="#2DD4BF"
+                >Energy {{ log.energy_score }}</text>
+              </g>
+            </g>
+            <!-- X-axis labels -->
+            <g v-for="(log, i) in chartLogs" :key="`xl-${i}`">
+              <text
+                v-if="i % xLabelStep() === 0"
+                :x="chartX(i)" :y="CHART.PT + CHART.H + 20"
+                text-anchor="middle" font-size="9" fill="#9ca3af"
+              >{{ formatShortDate(log.log_date as string) }}</text>
+            </g>
+          </svg>
         </div>
 
         <!-- Health summary -->
@@ -570,152 +681,11 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
 
       </div>
 
-      <!-- ── TAB 2: LOG ENTRIES ── -->
+      <!-- ── TAB 2: LOGGED ENTRIES ── -->
       <div v-else-if="activeTab === 'logs'">
         <div v-if="logsLoading" class="text-sm text-gray-400 py-8 text-center">Loading entries…</div>
         <div v-else-if="logs.length === 0" class="text-sm text-gray-400 py-8 text-center">No log entries yet.</div>
         <div v-else class="space-y-4">
-
-          <!-- Mood & Energy trend chart -->
-          <div class="bg-white border border-gray-200 rounded-xl p-5">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-sm font-semibold text-gray-900">Mood & Energy Trends</h2>
-              <div class="flex items-center gap-4 text-xs text-gray-500">
-                <span class="flex items-center gap-1.5">
-                  <span class="inline-block w-3 h-0.5 rounded" style="background:#16796F" />
-                  Mood
-                </span>
-                <span class="flex items-center gap-1.5">
-                  <span class="inline-block w-3 h-0.5 rounded" style="background:#2DD4BF" />
-                  Energy
-                </span>
-              </div>
-            </div>
-
-            <svg
-              :viewBox="`0 0 ${totalSVGWidth} ${totalSVGHeight}`"
-              class="w-full"
-              :style="`height: ${totalSVGHeight}px`"
-              @mouseleave="hoveredLogIndex = null"
-            >
-              <!-- Gridlines & Y-axis labels -->
-              <g v-for="tick in [0, 2, 4, 6, 8, 10]" :key="tick">
-                <line
-                  :x1="CHART.PL" :y1="chartY(tick)"
-                  :x2="CHART.PL + CHART.W" :y2="chartY(tick)"
-                  stroke="#f3f4f6" stroke-width="1"
-                />
-                <text
-                  :x="CHART.PL - 8" :y="chartY(tick) + 4"
-                  text-anchor="end" font-size="10" fill="#9ca3af"
-                >{{ tick }}</text>
-              </g>
-
-              <!-- Energy line -->
-              <path
-                v-if="buildPath('energy_score')"
-                :d="buildPath('energy_score')"
-                fill="none" stroke="#2DD4BF" stroke-width="2"
-                stroke-linejoin="round" stroke-linecap="round"
-              />
-
-              <!-- Mood line -->
-              <path
-                v-if="buildPath('mood_score')"
-                :d="buildPath('mood_score')"
-                fill="none" stroke="#16796F" stroke-width="2"
-                stroke-linejoin="round" stroke-linecap="round"
-              />
-
-              <!-- Data points + hover targets -->
-              <g
-                v-for="(log, i) in chartLogs"
-                :key="log.id as string"
-                @mouseenter="hoveredLogIndex = i"
-              >
-                <!-- Invisible wide hover strip -->
-                <rect
-                  :x="chartX(i) - 16" :y="CHART.PT"
-                  width="32" :height="CHART.H"
-                  fill="transparent"
-                />
-                <!-- Hover line -->
-                <line
-                  v-if="hoveredLogIndex === i"
-                  :x1="chartX(i)" :y1="CHART.PT"
-                  :x2="chartX(i)" :y2="CHART.PT + CHART.H"
-                  stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"
-                />
-                <!-- Mood dot -->
-                <circle
-                  v-if="(log.mood_score as number | null) != null"
-                  :cx="chartX(i)" :cy="chartY(log.mood_score as number)"
-                  :r="hoveredLogIndex === i ? 5 : 3"
-                  fill="#16796F" stroke="white" stroke-width="1.5"
-                />
-                <!-- Energy dot -->
-                <circle
-                  v-if="(log.energy_score as number | null) != null"
-                  :cx="chartX(i)" :cy="chartY(log.energy_score as number)"
-                  :r="hoveredLogIndex === i ? 5 : 3"
-                  fill="#2DD4BF" stroke="white" stroke-width="1.5"
-                />
-                <!-- Tooltip -->
-                <g v-if="hoveredLogIndex === i">
-                  <rect
-                    :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80)"
-                    :y="CHART.PT - 2"
-                    width="80" height="48" rx="6"
-                    fill="#1f2937"
-                  />
-                  <text
-                    :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80) + 40"
-                    :y="CHART.PT + 12"
-                    text-anchor="middle" font-size="9" fill="#9ca3af"
-                  >{{ formatShortDate(log.log_date as string) }}</text>
-                  <text
-                    v-if="(log.mood_score as number | null) != null"
-                    :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80) + 40"
-                    :y="CHART.PT + 26"
-                    text-anchor="middle" font-size="10" fill="#5eead4"
-                  >Mood {{ log.mood_score }}</text>
-                  <text
-                    v-if="(log.energy_score as number | null) != null"
-                    :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80) + 40"
-                    :y="CHART.PT + 40"
-                    text-anchor="middle" font-size="10" fill="#2DD4BF"
-                  >Energy {{ log.energy_score }}</text>
-                </g>
-              </g>
-
-              <!-- X-axis labels -->
-              <g v-for="(log, i) in chartLogs" :key="`xl-${i}`">
-                <text
-                  v-if="i % xLabelStep() === 0"
-                  :x="chartX(i)" :y="CHART.PT + CHART.H + 20"
-                  text-anchor="middle" font-size="9" fill="#9ca3af"
-                >{{ formatShortDate(log.log_date as string) }}</text>
-              </g>
-            </svg>
-          </div>
-
-          <!-- Focus Areas -->
-          <div class="bg-white border border-gray-200 rounded-xl p-5">
-            <h2 class="text-sm font-semibold text-gray-900 mb-4">Focus Areas</h2>
-            <p v-if="wheelFrequency.length === 0" class="text-xs text-gray-400">No categories tagged yet.</p>
-            <div v-else class="space-y-2.5">
-              <div v-for="item in wheelFrequency" :key="item.key" class="flex items-center gap-3">
-                <span class="text-xs text-gray-500 w-40 shrink-0 truncate">{{ item.label }}</span>
-                <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    class="h-2 bg-teal-500 rounded-full transition-all duration-500"
-                    :style="{ width: `${(item.count / wheelMax) * 100}%` }"
-                  />
-                </div>
-                <span class="text-xs font-medium text-gray-400 w-5 text-right shrink-0">{{ item.count }}</span>
-              </div>
-            </div>
-          </div>
 
           <!-- Log entry list -->
           <div class="space-y-2">
