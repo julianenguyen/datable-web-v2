@@ -415,6 +415,51 @@ const activeCycle = computed(() =>
             </button>
           </div>
         </div>
+
+        <!-- ── ARCHIVE / RESTORE ZONE ── -->
+        <div class="border rounded-xl overflow-hidden" :class="clientStatus === 'archived' ? 'border-teal-200' : 'border-gray-200'">
+          <div class="px-5 py-3 border-b" :class="clientStatus === 'archived' ? 'bg-teal-50 border-teal-200' : 'bg-gray-50 border-gray-200'">
+            <h2 class="text-sm font-semibold" :class="clientStatus === 'archived' ? 'text-teal-700' : 'text-gray-600'">
+              {{ clientStatus === 'archived' ? 'Archived Client' : 'Archive' }}
+            </h2>
+          </div>
+
+          <!-- Archived state -->
+          <div v-if="clientStatus === 'archived'" class="px-5 py-4 bg-white flex items-center justify-between gap-4">
+            <div>
+              <p class="text-sm font-medium text-gray-900">This client is archived</p>
+              <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                They still have full access to their Datable app and all historical data. You're just disconnected — no new activity will appear here. Restore to resume the relationship.
+              </p>
+            </div>
+            <button
+              @click="confirmUnarchive"
+              :disabled="unarchiving"
+              class="shrink-0 flex items-center gap-1.5 text-sm font-medium text-teal-700 border border-teal-300 hover:bg-teal-50 disabled:opacity-60 px-4 py-2 rounded-lg transition-colors"
+            >
+              <span v-if="unarchiving" class="w-3.5 h-3.5 border-2 border-teal-400/40 border-t-teal-600 rounded-full animate-spin" />
+              <RotateCcw v-else class="w-3.5 h-3.5" />
+              {{ unarchiving ? 'Restoring…' : 'Restore to Active' }}
+            </button>
+          </div>
+
+          <!-- Active state -->
+          <div v-else class="px-5 py-4 bg-white flex items-center justify-between gap-4">
+            <div>
+              <p class="text-sm font-medium text-gray-900">Archive this client</p>
+              <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                Disconnects the provider relationship — {{ clientName }} keeps their app access and all data, but you'll stop receiving their activity and they'll stop receiving check-ins from you. Reversible at any time.
+              </p>
+            </div>
+            <button
+              @click="showArchiveModal = true; archiveError = null"
+              class="shrink-0 text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 px-4 py-2 rounded-lg transition-colors"
+            >
+              Archive Client
+            </button>
+          </div>
+        </div>
+
       </div>
 
       <!-- ── TAB 2: LOG ENTRIES ── -->
@@ -674,50 +719,6 @@ const activeCycle = computed(() =>
           </div>
         </div>
       </div>
-      <!-- ── ARCHIVE / RESTORE ZONE ── -->
-      <div class="mt-12 border rounded-xl overflow-hidden" :class="clientStatus === 'archived' ? 'border-teal-200' : 'border-gray-200'">
-        <div class="px-5 py-3 border-b" :class="clientStatus === 'archived' ? 'bg-teal-50 border-teal-200' : 'bg-gray-50 border-gray-200'">
-          <h2 class="text-sm font-semibold" :class="clientStatus === 'archived' ? 'text-teal-700' : 'text-gray-600'">
-            {{ clientStatus === 'archived' ? 'Archived Client' : 'Archive' }}
-          </h2>
-        </div>
-
-        <!-- Archived state -->
-        <div v-if="clientStatus === 'archived'" class="px-5 py-4 bg-white flex items-center justify-between gap-4">
-          <div>
-            <p class="text-sm font-medium text-gray-900">This client is archived</p>
-            <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              They still have full access to their Datable app and all historical data. You're just disconnected — no new activity will appear here. Restore to resume the relationship.
-            </p>
-          </div>
-          <button
-            @click="confirmUnarchive"
-            :disabled="unarchiving"
-            class="shrink-0 flex items-center gap-1.5 text-sm font-medium text-teal-700 border border-teal-300 hover:bg-teal-50 disabled:opacity-60 px-4 py-2 rounded-lg transition-colors"
-          >
-            <span v-if="unarchiving" class="w-3.5 h-3.5 border-2 border-teal-400/40 border-t-teal-600 rounded-full animate-spin" />
-            <RotateCcw v-else class="w-3.5 h-3.5" />
-            {{ unarchiving ? 'Restoring…' : 'Restore to Active' }}
-          </button>
-        </div>
-
-        <!-- Active state -->
-        <div v-else class="px-5 py-4 bg-white flex items-center justify-between gap-4">
-          <div>
-            <p class="text-sm font-medium text-gray-900">Archive this client</p>
-            <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              Disconnects the provider relationship — {{ clientName }} keeps their app access and all data, but you'll stop receiving their activity and they'll stop receiving check-ins from you. Reversible at any time.
-            </p>
-          </div>
-          <button
-            @click="showArchiveModal = true; archiveNameInput = ''; archiveError = null"
-            class="shrink-0 text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 px-4 py-2 rounded-lg transition-colors"
-          >
-            Archive Client
-          </button>
-        </div>
-      </div>
-
     </div>
   </AppLayout>
 </template>
