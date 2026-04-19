@@ -104,12 +104,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (!data.user) throw new Error('Signup failed — no user returned.')
 
     user.value = data.user
-
-    // Initialize onboarding progress row
-    const { useOnboardingStore } = await import('@/stores/onboarding')
-    const onboarding = useOnboardingStore()
-    await onboarding.initProgress(data.user.id)
-
+    // onboarding_progress row is created automatically via DB trigger (handle_new_provider_user)
     return data.user
   }
 

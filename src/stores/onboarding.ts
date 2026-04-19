@@ -27,7 +27,7 @@ export const useOnboardingStore = defineStore('onboarding', () => {
 
   const currentStepRoute = computed(() => {
     const p = progress.value
-    if (!p) return '/signup'
+    if (!p) return '/onboarding/practice'
     if (!p.step_practice_profile) return '/onboarding/practice'
     if (!p.step_clinician_profile) return '/onboarding/clinician'
     if (!p.step_insurance_selected) return '/onboarding/insurance'
