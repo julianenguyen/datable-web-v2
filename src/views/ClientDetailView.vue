@@ -277,6 +277,28 @@ const activeCycle = computed(() =>
   sessionHistory.value.find((c: Record<string, unknown>) => c.status === 'active') as Record<string, unknown> | undefined
 )
 
+// ── Wheel of Life frequency ──
+const wheelFrequency = computed(() => {
+  const counts: Record<string, number> = {}
+  console.log('[WheelFreq] logs count:', logs.value.length)
+  console.log('[WheelFreq] sample wheel entries:', logs.value[0]?.wheel_of_life_entries)
+  for (const log of logs.value) {
+    const entries = log.wheel_of_life_entries as Array<{ category: string }> | null
+    if (!entries) continue
+    for (const entry of entries) {
+      if (entry.category) counts[entry.category] = (counts[entry.category] ?? 0) + 1
+    }
+  }
+  console.log('[WheelFreq] counts:', counts)
+  const result = Object.entries(WHEEL_OF_LIFE)
+    .map(([key, val]) => ({ key, label: val.label, count: counts[key] ?? 0 }))
+    .filter(c => c.count > 0)
+    .sort((a, b) => b.count - a.count)
+  console.log('[WheelFreq] result:', result)
+  return result
+})
+const wheelMax = computed(() => Math.max(...wheelFrequency.value.map(c => c.count), 1))
+
 // ── Mood / Energy chart ──
 const hoveredLogIndex = ref<number | null>(null)
 
@@ -441,6 +463,25 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           <h2 class="text-sm font-semibold text-gray-900 mb-4">Check-In List — Current Cycle</h2>
           <div v-if="checkinItems.length === 0" class="text-sm text-gray-400">
             No active check-in list. Start a new session summary to generate one.
+          </div>
+        </div>
+
+        <!-- Focus Areas -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <h2 class="text-sm font-semibold text-gray-900 mb-4">Focus Areas</h2>
+          <p v-if="logsLoading" class="text-xs text-gray-400">Loading…</p>
+          <p v-else-if="wheelFrequency.length === 0" class="text-xs text-gray-400">No categories tagged yet.</p>
+          <div v-else class="space-y-2.5">
+            <div v-for="item in wheelFrequency" :key="item.key" class="flex items-center gap-3">
+              <span class="text-xs text-gray-500 w-40 shrink-0 truncate">{{ item.label }}</span>
+              <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  class="h-2 bg-teal-500 rounded-full transition-all duration-500"
+                  :style="{ width: `${(item.count / wheelMax) * 100}%` }"
+                />
+              </div>
+              <span class="text-xs font-medium text-gray-400 w-5 text-right shrink-0">{{ item.count }}</span>
+            </div>
           </div>
         </div>
 
@@ -656,6 +697,24 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                 >{{ formatShortDate(log.log_date as string) }}</text>
               </g>
             </svg>
+          </div>
+
+          <!-- Focus Areas -->
+          <div class="bg-white border border-gray-200 rounded-xl p-5">
+            <h2 class="text-sm font-semibold text-gray-900 mb-4">Focus Areas</h2>
+            <p v-if="wheelFrequency.length === 0" class="text-xs text-gray-400">No categories tagged yet.</p>
+            <div v-else class="space-y-2.5">
+              <div v-for="item in wheelFrequency" :key="item.key" class="flex items-center gap-3">
+                <span class="text-xs text-gray-500 w-40 shrink-0 truncate">{{ item.label }}</span>
+                <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    class="h-2 bg-teal-500 rounded-full transition-all duration-500"
+                    :style="{ width: `${(item.count / wheelMax) * 100}%` }"
+                  />
+                </div>
+                <span class="text-xs font-medium text-gray-400 w-5 text-right shrink-0">{{ item.count }}</span>
+              </div>
+            </div>
           </div>
 
           <!-- Log entry list -->
