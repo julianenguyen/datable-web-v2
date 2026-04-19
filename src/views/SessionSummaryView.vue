@@ -18,6 +18,7 @@ const commitments = ref<string[]>([''])
 const watchFors = ref('')
 const notes = ref('')
 const loading = ref(false)
+const submitted = ref(false)
 const error = ref('')
 
 function addCommitment() {
@@ -74,7 +75,9 @@ async function handleSubmit() {
 
     if (summaryError) throw summaryError
 
-    // 3. Navigate back to client detail
+    // 3. Show success state then navigate back
+    submitted.value = true
+    await new Promise(r => setTimeout(r, 1800))
     router.push({ name: 'client-detail', params: { clientId } })
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
@@ -202,8 +205,19 @@ async function handleSubmit() {
           {{ error }}
         </div>
 
+        <!-- Success -->
+        <div v-if="submitted" class="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-xl px-5 py-4">
+          <svg class="w-5 h-5 text-teal-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <div>
+            <p class="text-sm font-semibold text-teal-800">Summary submitted</p>
+            <p class="text-xs text-teal-600 mt-0.5">The patient can now see this in their Sessions tab. Returning to client profile…</p>
+          </div>
+        </div>
+
         <!-- Submit -->
-        <div class="flex justify-end">
+        <div v-else class="flex justify-end">
           <button
             type="submit"
             :disabled="loading"
