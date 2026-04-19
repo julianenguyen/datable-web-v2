@@ -16,6 +16,7 @@ const themes = ref('')
 const strategies = ref('')
 const commitments = ref<string[]>([''])
 const watchFors = ref('')
+const notes = ref('')
 const loading = ref(false)
 const error = ref('')
 
@@ -68,6 +69,7 @@ async function handleSubmit() {
         strategies: strategies.value.trim(),
         commitments: filled,
         watch_fors: watchFors.value.trim() || null,
+        notes: notes.value.trim() || null,
       })
 
     if (summaryError) throw summaryError
@@ -200,6 +202,18 @@ async function handleSubmit() {
           />
         </div>
 
+        <!-- Notes -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <label class="block text-sm font-semibold text-gray-900 mb-1">Notes</label>
+          <p class="text-xs text-gray-500 mb-3">Private clinical notes — not visible to the client (optional)</p>
+          <textarea
+            v-model="notes"
+            rows="3"
+            placeholder="e.g., Client showed signs of progress around emotional regulation. Consider revisiting attachment framework next session…"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-gray-400 resize-none"
+          />
+        </div>
+
         <!-- Error -->
         <div v-if="error" class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           {{ error }}
@@ -213,7 +227,7 @@ async function handleSubmit() {
             class="bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors flex items-center gap-2"
           >
             <span v-if="loading" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            {{ loading ? 'Generating check-in list…' : 'Generate Check-In List' }}
+            {{ loading ? 'Submitting…' : 'Submit' }}
           </button>
         </div>
       </form>
