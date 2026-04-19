@@ -582,11 +582,11 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
               <h2 class="text-sm font-semibold text-gray-900">Mood & Energy Trends</h2>
               <div class="flex items-center gap-4 text-xs text-gray-500">
                 <span class="flex items-center gap-1.5">
-                  <span class="inline-block w-3 h-0.5 bg-teal-500 rounded" />
+                  <span class="inline-block w-3 h-0.5 rounded" style="background:#16796F" />
                   Mood
                 </span>
                 <span class="flex items-center gap-1.5">
-                  <span class="inline-block w-3 h-0.5 bg-amber-400 rounded" />
+                  <span class="inline-block w-3 h-0.5 rounded" style="background:#2DD4BF" />
                   Energy
                 </span>
               </div>
@@ -615,7 +615,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
               <path
                 v-if="buildPath('energy_score')"
                 :d="buildPath('energy_score')"
-                fill="none" stroke="#fbbf24" stroke-width="2"
+                fill="none" stroke="#2DD4BF" stroke-width="2"
                 stroke-linejoin="round" stroke-linecap="round"
               />
 
@@ -623,7 +623,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
               <path
                 v-if="buildPath('mood_score')"
                 :d="buildPath('mood_score')"
-                fill="none" stroke="#0d9488" stroke-width="2"
+                fill="none" stroke="#16796F" stroke-width="2"
                 stroke-linejoin="round" stroke-linecap="round"
               />
 
@@ -651,14 +651,14 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                   v-if="(log.mood_score as number | null) != null"
                   :cx="chartX(i)" :cy="chartY(log.mood_score as number)"
                   :r="hoveredLogIndex === i ? 5 : 3"
-                  fill="#0d9488" stroke="white" stroke-width="1.5"
+                  fill="#16796F" stroke="white" stroke-width="1.5"
                 />
                 <!-- Energy dot -->
                 <circle
                   v-if="(log.energy_score as number | null) != null"
                   :cx="chartX(i)" :cy="chartY(log.energy_score as number)"
                   :r="hoveredLogIndex === i ? 5 : 3"
-                  fill="#fbbf24" stroke="white" stroke-width="1.5"
+                  fill="#2DD4BF" stroke="white" stroke-width="1.5"
                 />
                 <!-- Tooltip -->
                 <g v-if="hoveredLogIndex === i">
@@ -683,7 +683,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                     v-if="(log.energy_score as number | null) != null"
                     :x="Math.min(chartX(i) - 36, CHART.PL + CHART.W - 80) + 40"
                     :y="CHART.PT + 40"
-                    text-anchor="middle" font-size="10" fill="#fcd34d"
+                    text-anchor="middle" font-size="10" fill="#2DD4BF"
                   >Energy {{ log.energy_score }}</text>
                 </g>
               </g>
