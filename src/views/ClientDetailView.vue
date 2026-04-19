@@ -111,13 +111,11 @@ async function confirmArchive() {
   archiving.value = true
   archiveError.value = null
   try {
-    const { error } = await supabase.functions.invoke('remove-client', {
-      body: { clientId },
-    })
-    if (error) {
-      const msg = await error.context?.json?.().catch(() => null)
-      throw new Error(msg?.error ?? error.message ?? 'Unknown error')
-    }
+    const { error } = await supabase
+      .from('clients')
+      .update({ status: 'archived' })
+      .eq('id', clientId)
+    if (error) throw error
     showArchiveModal.value = false
     router.push('/')
   } catch (e) {
@@ -130,9 +128,10 @@ async function confirmArchive() {
 async function confirmUnarchive() {
   unarchiving.value = true
   try {
-    const { error } = await supabase.functions.invoke('undo-remove-client', {
-      body: { clientId },
-    })
+    const { error } = await supabase
+      .from('clients')
+      .update({ status: 'active' })
+      .eq('id', clientId)
     if (error) throw error
     clientStatus.value = 'active'
   } catch (e) {

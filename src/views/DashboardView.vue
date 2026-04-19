@@ -144,9 +144,10 @@ async function loadClients() {
 async function unarchiveClient(clientId: string) {
   unarchivingId.value = clientId
   try {
-    const { error } = await supabase.functions.invoke('undo-remove-client', {
-      body: { clientId },
-    })
+    const { error } = await supabase
+      .from('clients')
+      .update({ status: 'active' })
+      .eq('id', clientId)
     if (error) throw error
     await loadClients()
   } catch (e) {
