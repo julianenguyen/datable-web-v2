@@ -39,7 +39,7 @@ async function handleSignOut() {
       <div class="px-3 py-4 border-t border-gray-100">
         <div class="px-3 py-2 mb-1">
           <p class="text-xs font-medium text-gray-900 truncate">{{ auth.profile?.name ?? auth.user?.email }}</p>
-          <p class="text-xs text-gray-500 truncate">{{ auth.profile?.practice_name ?? 'Provider' }}</p>
+          <p class="text-xs text-gray-500 truncate">{{ ('practice_name' in (auth.profile ?? {})) ? (auth.profile as { practice_name: string | null }).practice_name ?? 'Provider' : 'Provider' }}</p>
         </div>
         <button
           @click="handleSignOut"

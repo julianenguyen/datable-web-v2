@@ -16,6 +16,10 @@ const success = ref(false)
 const inviteLink = ref('')
 const deliveryWarning = ref('')
 
+function copyInviteLink() {
+  navigator.clipboard.writeText(inviteLink.value).catch(() => {})
+}
+
 async function handleInvite() {
   if (!name.value.trim()) {
     error.value = 'Client name is required.'
@@ -109,7 +113,7 @@ async function handleInvite() {
               {{ inviteLink }}
             </code>
             <button
-              @click="() => { navigator.clipboard.writeText(inviteLink); }"
+              @click="copyInviteLink"
               class="text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-2 rounded-lg transition-colors shrink-0"
             >
               Copy

@@ -78,7 +78,12 @@ async function handleSignIn() {
         </form>
       </div>
 
-      <p class="text-center text-xs text-gray-400 mt-6">
+      <p class="text-center text-sm text-gray-500 mt-5">
+        New provider?
+        <router-link to="/signup" class="text-teal-600 hover:text-teal-700 font-medium">Create an account →</router-link>
+      </p>
+
+      <p class="text-center text-xs text-gray-400 mt-4">
         Datable Health is a HIPAA-compliant clinical tool.<br />
         Unauthorized access is prohibited.
       </p>
