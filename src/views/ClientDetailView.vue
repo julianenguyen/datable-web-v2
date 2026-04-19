@@ -4,7 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { logPhiAccess } from '@/lib/audit'
-import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles, Trash2, Plus, Pencil, X, Check } from 'lucide-vue-next'
+import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles, Trash2, Plus, Pencil, X, Check, RotateCcw } from 'lucide-vue-next'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
 
 const router = useRouter()
@@ -38,9 +38,7 @@ const generatingBrief = ref(false)
 
 // Archive / unarchive
 const clientStatus = ref<string>('active') // 'active' | 'pending' | 'archived'
-const clientActivated = ref(false) // true if invite_used_at is set
 const showArchiveModal = ref(false)
-const archiveNameInput = ref('')
 const archiving = ref(false)
 const archiveError = ref<string | null>(null)
 const unarchiving = ref(false)
@@ -110,21 +108,21 @@ async function saveCycleEdit(cycleId: string) {
 }
 
 async function confirmArchive() {
-  if (clientActivated.value && archiveNameInput.value.trim() !== clientName.value.trim()) {
-    archiveError.value = 'Name does not match. Please type the client\'s full name.'
-    return
-  }
   archiving.value = true
   archiveError.value = null
   try {
     const { error } = await supabase.functions.invoke('remove-client', {
       body: { clientId },
     })
-    if (error) throw error
+    if (error) {
+      const msg = await error.context?.json?.().catch(() => null)
+      throw new Error(msg?.error ?? error.message ?? 'Unknown error')
+    }
+    showArchiveModal.value = false
     router.push('/')
   } catch (e) {
     console.error('[ClientDetail] archive error:', e)
-    archiveError.value = 'Failed to archive client. Please try again.'
+    archiveError.value = e instanceof Error ? e.message : 'Failed to archive client. Please try again.'
     archiving.value = false
   }
 }
@@ -147,13 +145,12 @@ async function confirmUnarchive() {
 onMounted(async () => {
   const { data: clientRow } = await supabase
     .from('clients')
-    .select('name, status, invite_used_at')
+    .select('name, status')
     .eq('id', clientId)
     .single()
   if (clientRow) {
     clientName.value = clientRow.name
     clientStatus.value = clientRow.status ?? 'active'
-    clientActivated.value = !!clientRow.invite_used_at
   }
 
   await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory()])
@@ -303,88 +300,53 @@ const activeCycle = computed(() =>
               </div>
               <div>
                 <h2 class="text-base font-semibold text-gray-900">Archive {{ clientName }}?</h2>
-                <p class="text-xs text-gray-400 mt-0.5">This disconnects the relationship — it does not delete anything</p>
+                <p class="text-xs text-gray-400 mt-0.5">This disconnects the relationship — nothing is deleted</p>
               </div>
             </div>
 
-            <!-- State A: not yet activated -->
-            <template v-if="!clientActivated">
-              <p class="text-sm text-gray-500 mb-6 leading-relaxed">
-                This client hasn't activated their account yet, so archiving them simply revokes their pending invite and removes them from your roster. You can re-invite them at any time.
-              </p>
-              <div class="flex gap-3">
-                <button
-                  @click="showArchiveModal = false"
-                  :disabled="archiving"
-                  class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  @click="confirmArchive"
-                  :disabled="archiving"
-                  class="flex-1 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
-                >
-                  {{ archiving ? 'Archiving…' : 'Archive Client' }}
-                </button>
-              </div>
-            </template>
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5 space-y-1.5">
+              <li class="flex items-start gap-2 text-xs text-gray-500 list-none">
+                <span class="text-green-500 shrink-0">✓</span>
+                <span><span class="font-medium text-gray-700">{{ clientName }} keeps full app access</span> — all their data stays intact.</span>
+              </li>
+              <li class="flex items-start gap-2 text-xs text-gray-500 list-none">
+                <span class="text-green-500 shrink-0">✓</span>
+                <span>They can continue using Datable independently.</span>
+              </li>
+              <li class="flex items-start gap-2 text-xs text-gray-500 list-none">
+                <span class="text-gray-400 shrink-0">–</span>
+                <span>You'll stop seeing their new activity.</span>
+              </li>
+              <li class="flex items-start gap-2 text-xs text-gray-500 list-none">
+                <span class="text-gray-400 shrink-0">–</span>
+                <span>They'll stop receiving check-ins from you.</span>
+              </li>
+              <li class="flex items-start gap-2 text-xs text-gray-500 list-none">
+                <span class="text-teal-500 shrink-0">↩</span>
+                <span>Reversible at any time from your roster.</span>
+              </li>
+            </div>
 
-            <!-- State B: activated — must type name -->
-            <template v-else>
-              <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 space-y-2">
-                <p class="text-xs font-semibold text-gray-700 uppercase tracking-wide">What happens when you archive</p>
-                <ul class="space-y-1.5">
-                  <li class="flex items-start gap-2 text-xs text-gray-500">
-                    <span class="text-green-500 mt-0.5 shrink-0">✓</span>
-                    <span><span class="font-medium text-gray-700">{{ clientName }} keeps full app access</span> — their account, all past logs, and health data remain intact.</span>
-                  </li>
-                  <li class="flex items-start gap-2 text-xs text-gray-500">
-                    <span class="text-green-500 mt-0.5 shrink-0">✓</span>
-                    <span>They can continue using Datable independently.</span>
-                  </li>
-                  <li class="flex items-start gap-2 text-xs text-gray-500">
-                    <span class="text-gray-400 mt-0.5 shrink-0">–</span>
-                    <span>You will <span class="font-medium text-gray-700">no longer see their new activity</span> or receive real-time data.</span>
-                  </li>
-                  <li class="flex items-start gap-2 text-xs text-gray-500">
-                    <span class="text-gray-400 mt-0.5 shrink-0">–</span>
-                    <span>They will <span class="font-medium text-gray-700">no longer receive check-ins or action plans</span> from you.</span>
-                  </li>
-                </ul>
-              </div>
-              <div class="mb-4">
-                <label class="block text-xs font-medium text-gray-600 mb-1.5">
-                  Type <span class="font-semibold text-gray-900">{{ clientName }}</span> to confirm
-                </label>
-                <input
-                  v-model="archiveNameInput"
-                  type="text"
-                  :placeholder="clientName"
-                  autocomplete="off"
-                  class="w-full px-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 transition-colors"
-                  :class="archiveError ? 'border-amber-400 focus:ring-amber-400' : 'border-gray-300 focus:ring-amber-400'"
-                  @keydown.enter="confirmArchive"
-                />
-                <p v-if="archiveError" class="text-xs text-red-500 mt-1.5">{{ archiveError }}</p>
-              </div>
-              <div class="flex gap-3">
-                <button
-                  @click="showArchiveModal = false; archiveNameInput = ''; archiveError = null"
-                  :disabled="archiving"
-                  class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  @click="confirmArchive"
-                  :disabled="archiving || archiveNameInput.trim() !== clientName.trim()"
-                  class="flex-1 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 py-2.5 rounded-xl transition-colors"
-                >
-                  {{ archiving ? 'Archiving…' : 'Archive Client' }}
-                </button>
-              </div>
-            </template>
+            <p v-if="archiveError" class="text-xs text-red-500 mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {{ archiveError }}
+            </p>
+
+            <div class="flex gap-3">
+              <button
+                @click="showArchiveModal = false; archiveError = null"
+                :disabled="archiving"
+                class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                @click="confirmArchive"
+                :disabled="archiving"
+                class="flex-1 text-sm font-medium text-white bg-gray-800 hover:bg-gray-900 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
+              >
+                {{ archiving ? 'Archiving…' : 'Archive Client' }}
+              </button>
+            </div>
 
           </div>
         </div>
@@ -734,10 +696,8 @@ const activeCycle = computed(() =>
             :disabled="unarchiving"
             class="shrink-0 flex items-center gap-1.5 text-sm font-medium text-teal-700 border border-teal-300 hover:bg-teal-50 disabled:opacity-60 px-4 py-2 rounded-lg transition-colors"
           >
-            <svg v-if="unarchiving" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
+            <span v-if="unarchiving" class="w-3.5 h-3.5 border-2 border-teal-400/40 border-t-teal-600 rounded-full animate-spin" />
+            <RotateCcw v-else class="w-3.5 h-3.5" />
             {{ unarchiving ? 'Restoring…' : 'Restore to Active' }}
           </button>
         </div>
