@@ -74,25 +74,8 @@ async function handleSubmit() {
 
     if (summaryError) throw summaryError
 
-    // 3. Call AI edge function to generate check-in list
-    const { data: aiData, error: aiError } = await supabase.functions.invoke('generate-checkin-list', {
-      body: {
-        cycleId,
-        themes: themes.value.trim(),
-        strategies: strategies.value.trim(),
-        commitments: filled,
-        watchFors: watchFors.value.trim(),
-      },
-    })
-
-    if (aiError) throw new Error('AI generation failed. Please try again.')
-
-    // 4. Navigate to approval screen
-    router.push({
-      name: 'checkin-approval',
-      params: { clientId },
-      query: { cycleId, listId: aiData.listId },
-    })
+    // 3. Navigate back to client detail
+    router.push({ name: 'client-detail', params: { clientId } })
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
   } finally {
@@ -227,7 +210,7 @@ async function handleSubmit() {
             class="bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors flex items-center gap-2"
           >
             <span v-if="loading" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            {{ loading ? 'Submitting…' : 'Submit' }}
+            {{ loading ? 'Saving…' : 'Submit' }}
           </button>
         </div>
       </form>
