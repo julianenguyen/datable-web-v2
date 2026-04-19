@@ -36,9 +36,12 @@ const expandedCycles = ref<Set<string>>(new Set())
 // Brief generation
 const generatingBrief = ref(false)
 
-// Delete client
-const showDeleteConfirm = ref(false)
-const deleting = ref(false)
+// Remove client (soft delete)
+const clientActivated = ref(false) // true if invite_used_at is set
+const showRemoveModal = ref(false)
+const removeNameInput = ref('')
+const removing = ref(false)
+const removeError = ref<string | null>(null)
 
 // Session cycle management
 const showNewCycleForm = ref(false)
@@ -104,29 +107,41 @@ async function saveCycleEdit(cycleId: string) {
   }
 }
 
-async function deleteClient() {
-  deleting.value = true
+async function confirmRemove() {
+  // For activated clients, require the name to match exactly
+  if (clientActivated.value && removeNameInput.value.trim() !== clientName.value.trim()) {
+    removeError.value = 'Name does not match. Please type the client\'s full name.'
+    return
+  }
+  removing.value = true
+  removeError.value = null
   try {
-    const { error } = await supabase
-      .from('clients')
-      .delete()
-      .eq('id', clientId)
+    const { error } = await supabase.functions.invoke('remove-client', {
+      body: { clientId },
+    })
     if (error) throw error
-    router.push('/')
+    // Navigate to roster with undo toast params
+    router.push({
+      path: '/',
+      query: { undoClientId: clientId, undoClientName: clientName.value },
+    })
   } catch (e) {
-    console.error('Delete error:', e)
-    deleting.value = false
-    showDeleteConfirm.value = false
+    console.error('[ClientDetail] remove error:', e)
+    removeError.value = 'Failed to remove client. Please try again.'
+    removing.value = false
   }
 }
 
 onMounted(async () => {
   const { data: clientRow } = await supabase
     .from('clients')
-    .select('name')
+    .select('name, invite_used_at')
     .eq('id', clientId)
     .single()
-  if (clientRow) clientName.value = clientRow.name
+  if (clientRow) {
+    clientName.value = clientRow.name
+    clientActivated.value = !!clientRow.invite_used_at
+  }
 
   await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory()])
 })
@@ -255,7 +270,7 @@ const activeCycle = computed(() =>
         </div>
         <div class="flex items-center gap-2">
           <button
-            @click="showDeleteConfirm = true"
+            @click="showRemoveModal = true; removeNameInput = ''; removeError = null"
             class="flex items-center gap-1.5 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
           >
             <Trash2 class="w-4 h-4" />
@@ -270,30 +285,90 @@ const activeCycle = computed(() =>
         </div>
       </div>
 
-      <!-- Delete confirmation modal -->
+      <!-- Remove client modal -->
       <Teleport to="body">
-        <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/40" @click="showDeleteConfirm = false" />
+        <div v-if="showRemoveModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/40" @click="!removing && (showRemoveModal = false)" />
           <div class="relative bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
-            <h2 class="text-base font-semibold text-gray-900 mb-2">Remove {{ clientName }}?</h2>
-            <p class="text-sm text-gray-500 mb-6">
-              This will permanently delete their account and all associated data — logs, check-ins, session history, and health data. This cannot be undone.
-            </p>
-            <div class="flex gap-3">
-              <button
-                @click="showDeleteConfirm = false"
-                class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                @click="deleteClient"
-                :disabled="deleting"
-                class="flex-1 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
-              >
-                {{ deleting ? 'Removing…' : 'Yes, Remove' }}
-              </button>
-            </div>
+
+            <!-- State A: not yet activated (invite pending) -->
+            <template v-if="!clientActivated">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                  <Trash2 class="w-5 h-5 text-red-600" />
+                </div>
+                <h2 class="text-base font-semibold text-gray-900">Remove {{ clientName }}?</h2>
+              </div>
+              <p class="text-sm text-gray-500 mb-6 leading-relaxed">
+                This client hasn't activated their account yet. Removing them will revoke their invite and delete all associated data.
+                You'll have <span class="font-medium text-gray-700">24 hours</span> to undo this from the roster.
+              </p>
+              <div class="flex gap-3">
+                <button
+                  @click="showRemoveModal = false"
+                  :disabled="removing"
+                  class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  @click="confirmRemove"
+                  :disabled="removing"
+                  class="flex-1 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
+                >
+                  {{ removing ? 'Removing…' : 'Remove Client' }}
+                </button>
+              </div>
+            </template>
+
+            <!-- State B: activated account — must type client name -->
+            <template v-else>
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                  <Trash2 class="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h2 class="text-base font-semibold text-gray-900">Remove {{ clientName }}?</h2>
+                  <p class="text-xs text-gray-400 mt-0.5">This action requires confirmation</p>
+                </div>
+              </div>
+              <p class="text-sm text-gray-500 mb-4 leading-relaxed">
+                Removing an active client will hide them from your roster and revoke their app access.
+                Their data is retained for <span class="font-medium text-gray-700">24 hours</span> — you can undo this from the roster page.
+              </p>
+              <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">
+                  Type <span class="font-semibold text-gray-900">{{ clientName }}</span> to confirm
+                </label>
+                <input
+                  v-model="removeNameInput"
+                  type="text"
+                  :placeholder="clientName"
+                  autocomplete="off"
+                  class="w-full px-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 transition-colors"
+                  :class="removeError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-red-400'"
+                  @keydown.enter="confirmRemove"
+                />
+                <p v-if="removeError" class="text-xs text-red-500 mt-1.5">{{ removeError }}</p>
+              </div>
+              <div class="flex gap-3">
+                <button
+                  @click="showRemoveModal = false; removeNameInput = ''; removeError = null"
+                  :disabled="removing"
+                  class="flex-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 py-2.5 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  @click="confirmRemove"
+                  :disabled="removing || removeNameInput.trim() !== clientName.trim()"
+                  class="flex-1 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 py-2.5 rounded-xl transition-colors"
+                >
+                  {{ removing ? 'Removing…' : 'Remove Client' }}
+                </button>
+              </div>
+            </template>
+
           </div>
         </div>
       </Teleport>
@@ -621,6 +696,28 @@ const activeCycle = computed(() =>
           </div>
         </div>
       </div>
+      <!-- ── DANGER ZONE ── -->
+      <div class="mt-12 border border-red-200 rounded-xl overflow-hidden">
+        <div class="bg-red-50 px-5 py-3 border-b border-red-200">
+          <h2 class="text-sm font-semibold text-red-700">Danger Zone</h2>
+        </div>
+        <div class="px-5 py-4 bg-white flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-gray-900">Remove this client</p>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Removes {{ clientName }} from your roster.
+              {{ clientActivated ? 'Their data is retained for 24 hours and the action can be undone.' : 'Their invite will be revoked.' }}
+            </p>
+          </div>
+          <button
+            @click="showRemoveModal = true; removeNameInput = ''; removeError = null"
+            class="shrink-0 text-sm font-medium text-red-600 border border-red-300 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors"
+          >
+            Remove Client
+          </button>
+        </div>
+      </div>
+
     </div>
   </AppLayout>
 </template>

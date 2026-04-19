@@ -3,7 +3,7 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
-import { AlertTriangle, Clock, CheckCircle2, Plus, FileText, ChevronRight } from 'lucide-vue-next'
+import { AlertTriangle, Clock, CheckCircle2, Plus, FileText, ChevronRight, RotateCcw } from 'lucide-vue-next'
 
 interface ClientCard {
   id: string
@@ -25,20 +25,78 @@ const clients = ref<ClientCard[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 
+// Undo toast state
+const undoClientId = ref<string | null>(null)
+const undoClientName = ref<string | null>(null)
+const undoing = ref(false)
+let undoTimer: ReturnType<typeof setTimeout> | null = null
+
+function showUndoToast(clientId: string, clientName: string) {
+  undoClientId.value = clientId
+  undoClientName.value = clientName
+  if (undoTimer) clearTimeout(undoTimer)
+  undoTimer = setTimeout(() => {
+    undoClientId.value = null
+    undoClientName.value = null
+  }, 8000)
+}
+
+function dismissUndoToast() {
+  if (undoTimer) clearTimeout(undoTimer)
+  undoClientId.value = null
+  undoClientName.value = null
+}
+
+async function undoRemove() {
+  if (!undoClientId.value) return
+  undoing.value = true
+  try {
+    const { error } = await supabase.functions.invoke('undo-remove-client', {
+      body: { clientId: undoClientId.value },
+    })
+    if (error) throw error
+    dismissUndoToast()
+    await loadClients()
+  } catch (e) {
+    console.error('[Dashboard] undo remove failed:', e)
+  } finally {
+    undoing.value = false
+  }
+}
+
 // Reload every time this view is navigated to (e.g. after adding a client)
-onMounted(loadClients)
+onMounted(() => {
+  loadClients()
+  // Check for undo params from remove-client navigation
+  const qClientId = route.query.undoClientId as string | undefined
+  const qClientName = route.query.undoClientName as string | undefined
+  if (qClientId && qClientName) {
+    showUndoToast(qClientId, qClientName)
+    // Clean up URL without re-navigating
+    router.replace({ path: '/' })
+  }
+})
 watch(() => route.fullPath, () => {
-  if (route.path === '/') loadClients()
+  if (route.path === '/') {
+    loadClients()
+    const qClientId = route.query.undoClientId as string | undefined
+    const qClientName = route.query.undoClientName as string | undefined
+    if (qClientId && qClientName) {
+      showUndoToast(qClientId, qClientName)
+      router.replace({ path: '/' })
+    }
+  }
 })
 
 async function loadClients() {
   loading.value = true
   loadError.value = null
 
-  // 1. All clients belonging to this therapist
+  // 1. All clients belonging to this therapist (exclude soft-deleted)
   const { data: clientRows, error } = await supabase
     .from('clients')
     .select('id, name, status')
+    .is('removed_at', null)
     .order('name')
 
   console.log('[Dashboard] clients query:', { clientRows, error })
@@ -179,6 +237,40 @@ function openClientDetail(clientId: string) {
 
 <template>
   <AppLayout>
+    <!-- Undo toast -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition-all duration-300 ease-out"
+        enter-from-class="translate-y-full opacity-0"
+        enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transition-all duration-200 ease-in"
+        leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-full opacity-0"
+      >
+        <div
+          v-if="undoClientId"
+          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-gray-900 text-white text-sm px-5 py-3.5 rounded-2xl shadow-xl"
+        >
+          <span class="text-gray-300">
+            <span class="font-semibold text-white">{{ undoClientName }}</span> was removed from your roster.
+          </span>
+          <button
+            @click="undoRemove"
+            :disabled="undoing"
+            class="flex items-center gap-1.5 font-semibold text-teal-400 hover:text-teal-300 disabled:opacity-60 transition-colors shrink-0"
+          >
+            <RotateCcw class="w-3.5 h-3.5" />
+            {{ undoing ? 'Undoing…' : 'Undo' }}
+          </button>
+          <button @click="dismissUndoToast" class="text-gray-500 hover:text-gray-300 transition-colors ml-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </Transition>
+    </Teleport>
+
     <div class="flex-1 p-8">
       <!-- Header -->
       <div class="flex items-center justify-between mb-6">
