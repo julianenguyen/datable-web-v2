@@ -165,14 +165,11 @@ onMounted(async () => {
 
   await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory()])
 
-  // Real-time: reload logs whenever the patient submits or updates a daily log
+  // Real-time: reload on logs or commitment progress changes
   realtimeChannel = supabase
-    .channel(`daily_logs:client:${clientId}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'daily_logs', filter: `client_id=eq.${clientId}` },
-      () => { loadLogs() }
-    )
+    .channel(`client-detail:${clientId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_logs', filter: `client_id=eq.${clientId}` }, () => { loadLogs() })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'commitment_progress', filter: `client_id=eq.${clientId}` }, () => { loadSessionHistory() })
     .subscribe()
 })
 
@@ -228,7 +225,7 @@ async function loadSessionHistory() {
       id, session_date, next_session_date, status,
       checkin_lists (id, status, sent_at),
       presession_briefs (id, content, generated_at),
-      session_summaries (id, themes, strategies, commitments, watch_fors, submitted_at)
+      session_summaries (id, themes, strategies, commitments, watch_fors, submitted_at, commitment_progress (commitment_index, status, updated_at))
     `)
     .eq('client_id', clientId)
     .order('session_date', { ascending: false })
@@ -277,7 +274,10 @@ function moodColor(score: number) {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  // Append T12:00:00 for date-only strings (YYYY-MM-DD) to avoid UTC midnight
+  // shifting the date back one day in timezones behind UTC
+  const d = new Date(dateStr.length === 10 ? dateStr + 'T12:00:00' : dateStr)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function sleepHours(minutes: number | null) {
@@ -352,7 +352,7 @@ function xLabelStep(): number {
 }
 
 function formatShortDate(dateStr: string): string {
-  const d = new Date(dateStr)
+  const d = new Date(dateStr.length === 10 ? dateStr + 'T12:00:00' : dateStr)
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
@@ -849,39 +849,95 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
             :class="cycle.status === 'active' ? 'border-teal-200' : 'border-gray-200'"
           >
             <!-- View mode -->
-            <div v-if="editingCycleId !== cycle.id" class="px-5 py-4">
-              <!-- Top row: metadata + actions -->
-              <div class="flex items-start justify-between">
-                <div class="space-y-2">
+            <template v-if="editingCycleId !== cycle.id">
+              <!-- Collapsed header (always visible) — click to expand -->
+              <button
+                class="w-full px-5 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors text-left"
+                @click="toggleCycle(cycle.id as string)"
+              >
+                <div class="flex items-center gap-3 min-w-0">
                   <!-- Status badge -->
                   <span
-                    class="inline-flex text-xs px-2.5 py-0.5 rounded-full font-medium"
-                    :class="cycle.status === 'active'
-                      ? 'bg-teal-50 text-teal-700 border border-teal-200'
-                      : 'bg-gray-100 text-gray-500'"
+                    class="shrink-0 inline-flex text-xs px-2.5 py-0.5 rounded-full font-medium"
+                    :class="cycle.status === 'active' ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-gray-100 text-gray-500'"
                   >
-                    {{ cycle.status === 'active' ? 'Active cycle' : 'Closed' }}
+                    {{ cycle.status === 'active' ? 'Active' : 'Closed' }}
                   </span>
 
-                  <!-- Dates -->
-                  <div class="flex items-center gap-6 text-sm">
-                    <div>
-                      <span class="text-xs text-gray-400 block mb-0.5">Session date</span>
-                      <span class="font-medium text-gray-900">
-                        {{ cycle.session_date ? formatDate(cycle.session_date as string) : '—' }}
-                      </span>
-                    </div>
-                    <div class="text-gray-300">→</div>
-                    <div>
-                      <span class="text-xs text-gray-400 block mb-0.5">Next session</span>
-                      <span class="font-medium text-gray-900">
-                        {{ cycle.next_session_date ? formatDate(cycle.next_session_date as string) : '—' }}
-                      </span>
-                    </div>
-                  </div>
+                  <!-- Date -->
+                  <span class="text-sm font-medium text-gray-900 shrink-0">
+                    {{ cycle.session_date ? formatDate(cycle.session_date as string) : 'No date' }}
+                  </span>
 
-                  <!-- Pre-session brief link -->
-                  <div v-if="(cycle.presession_briefs as unknown[])?.length > 0">
+                  <!-- Summary chips (visible when collapsed) -->
+                  <template v-if="(cycle.session_summaries as unknown[])?.length > 0">
+                    <span class="text-gray-200">·</span>
+                    <!-- Themes chip -->
+                    <span class="shrink-0 inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                      📝 Summary
+                    </span>
+                    <!-- Action items chip -->
+                    <template v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[] | undefined">
+                      <span
+                        class="shrink-0 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+                        :class="
+                          ((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress &&
+                          (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[]).filter((p: Record<string, unknown>) => p.status === 'completed').length ===
+                          ((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as unknown as number
+                            ? 'bg-green-50 text-green-700'
+                            : (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.some((p: Record<string, unknown>) => p.status === 'in_progress' || p.status === 'completed')
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-gray-100 text-gray-500'
+                        "
+                      >
+                        ✓ {{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.filter((p: Record<string, unknown>) => p.status === 'completed').length ?? 0 }}/{{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[]).length }} done
+                      </span>
+                    </template>
+                    <!-- Watch-fors chip -->
+                    <span
+                      v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors"
+                      class="shrink-0 inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full"
+                    >
+                      👁 Watch-fors
+                    </span>
+                  </template>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <!-- Edit / Delete -->
+                  <button
+                    @click.stop="startEdit(cycle)"
+                    class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Pencil class="w-3 h-3" />
+                    Edit
+                  </button>
+                  <button
+                    @click.stop="deleteCycle(cycle.id as string)"
+                    class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Trash2 class="w-3 h-3" />
+                    Delete
+                  </button>
+                  <ChevronDown v-if="!expandedCycles.has(cycle.id as string)" class="w-4 h-4 text-gray-400" />
+                  <ChevronUp v-else class="w-4 h-4 text-gray-400" />
+                </div>
+              </button>
+
+              <!-- Expanded detail -->
+              <div v-if="expandedCycles.has(cycle.id as string)" class="px-5 pb-5 border-t border-gray-100 pt-4 space-y-4">
+                <!-- Dates + brief link -->
+                <div class="flex items-center gap-6 text-sm">
+                  <div>
+                    <span class="text-xs text-gray-400 block mb-0.5">Session date</span>
+                    <span class="font-medium text-gray-900">{{ cycle.session_date ? formatDate(cycle.session_date as string) : '—' }}</span>
+                  </div>
+                  <div class="text-gray-300">→</div>
+                  <div>
+                    <span class="text-xs text-gray-400 block mb-0.5">Next session</span>
+                    <span class="font-medium text-gray-900">{{ cycle.next_session_date ? formatDate(cycle.next_session_date as string) : '—' }}</span>
+                  </div>
+                  <div v-if="(cycle.presession_briefs as unknown[])?.length > 0" class="ml-auto">
                     <button
                       @click="router.push({ name: 'presession-brief', params: { clientId }, query: { briefId: String(((cycle.presession_briefs as Record<string, unknown>[])[0]).id) } })"
                       class="text-xs text-teal-600 hover:text-teal-700 font-medium"
@@ -891,57 +947,54 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                   </div>
                 </div>
 
-                <!-- Edit / Delete buttons -->
-                <div class="flex items-center gap-2">
-                  <button
-                    @click="startEdit(cycle)"
-                    class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <Pencil class="w-3 h-3" />
-                    Edit
-                  </button>
-                  <button
-                    @click="deleteCycle(cycle.id as string)"
-                    class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <Trash2 class="w-3 h-3" />
-                    Delete
-                  </button>
-                </div>
-              </div>
+                <!-- Post-session summary -->
+                <div v-if="(cycle.session_summaries as unknown[])?.length > 0" class="space-y-4">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Post-Session Summary</p>
 
-              <!-- Post-session summary -->
-              <div v-if="(cycle.session_summaries as unknown[])?.length > 0" class="mt-4 pt-4 border-t border-gray-100">
-                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Post-Session Summary</p>
-                <div class="space-y-3">
                   <div>
                     <p class="text-xs text-gray-400 mb-1">What was discussed</p>
                     <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).themes }}</p>
                   </div>
+
                   <div>
                     <p class="text-xs text-gray-400 mb-1">Strategies & tools</p>
                     <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).strategies }}</p>
                   </div>
+
                   <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).commitments">
-                    <p class="text-xs text-gray-400 mb-1">Client commitments</p>
-                    <ul class="space-y-1">
+                    <p class="text-xs text-gray-400 mb-2">Client commitments</p>
+                    <ul class="space-y-2">
                       <li
                         v-for="(c, i) in ((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[]"
                         :key="i"
-                        class="flex items-start gap-2 text-sm text-gray-800"
+                        class="flex items-start gap-2.5"
                       >
-                        <span class="text-teal-500 mt-0.5">•</span>
-                        {{ c }}
+                        <span
+                          class="shrink-0 inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 whitespace-nowrap"
+                          :class="{
+                            'bg-green-50 text-green-700': (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'completed',
+                            'bg-amber-50 text-amber-700': (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'in_progress',
+                            'bg-gray-100 text-gray-500': !(((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i) || (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'not_started',
+                          }"
+                        >
+                          {{
+                            (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'completed' ? '✓ Done'
+                            : (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'in_progress' ? '⏳ In progress'
+                            : '— Not started'
+                          }}
+                        </span>
+                        <span class="text-sm text-gray-800 leading-relaxed">{{ c }}</span>
                       </li>
                     </ul>
                   </div>
+
                   <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors">
                     <p class="text-xs text-gray-400 mb-1">Watch-fors</p>
                     <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p>
                   </div>
                 </div>
               </div>
-            </div>
+            </template>
 
             <!-- Edit mode -->
             <div v-else class="px-5 py-4 bg-gray-50">
