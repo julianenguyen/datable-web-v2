@@ -181,7 +181,7 @@ onUnmounted(() => {
 
 async function loadLogs() {
   logsLoading.value = true
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('daily_logs')
     .select('*')
     .eq('client_id', clientId)
@@ -289,8 +289,6 @@ const activeCycle = computed(() =>
 // ── Wheel of Life frequency ──
 const wheelFrequency = computed(() => {
   const counts: Record<string, number> = {}
-  console.log('[WheelFreq] logs count:', logs.value.length)
-  console.log('[WheelFreq] sample wheel entries:', logs.value[0]?.wheel_of_life_entries)
   for (const log of logs.value) {
     const entries = log.wheel_of_life_entries as Array<{ category: string }> | null
     if (!entries) continue
