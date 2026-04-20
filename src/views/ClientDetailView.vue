@@ -19,9 +19,6 @@ const logs = ref<Record<string, unknown>[]>([])
 const expandedLogs = ref<Set<string>>(new Set())
 const logsLoading = ref(false)
 
-// Check-in items for current cycle
-const checkinItems = ref<Record<string, unknown>[]>([])
-
 // Healthkit summary
 const healthSummary = ref<{
   avgSleep: number | null
@@ -469,14 +466,6 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
 
       <!-- ── TAB 1: OVERVIEW ── -->
       <div v-if="activeTab === 'overview'" class="space-y-6">
-
-        <!-- Check-in completion -->
-        <div class="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 class="text-sm font-semibold text-gray-900 mb-4">Check-In List — Current Cycle</h2>
-          <div v-if="checkinItems.length === 0" class="text-sm text-gray-400">
-            No active check-in list. Start a new session summary to generate one.
-          </div>
-        </div>
 
         <!-- Focus Areas -->
         <div class="bg-white border border-gray-200 rounded-xl p-5">
