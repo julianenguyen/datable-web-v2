@@ -904,21 +904,6 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                 </div>
 
                 <div class="flex items-center gap-2 shrink-0">
-                  <!-- Edit / Delete -->
-                  <button
-                    @click.stop="startEdit(cycle)"
-                    class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <Pencil class="w-3 h-3" />
-                    Edit
-                  </button>
-                  <button
-                    @click.stop="deleteCycle(cycle.id as string)"
-                    class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <Trash2 class="w-3 h-3" />
-                    Delete
-                  </button>
                   <ChevronDown v-if="!expandedCycles.has(cycle.id as string)" class="w-4 h-4 text-gray-400" />
                   <ChevronUp v-else class="w-4 h-4 text-gray-400" />
                 </div>
@@ -992,6 +977,24 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                     <p class="text-xs text-gray-400 mb-1">Watch-fors</p>
                     <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p>
                   </div>
+                </div>
+
+                <!-- Edit / Delete -->
+                <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    @click="startEdit(cycle)"
+                    class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Pencil class="w-3 h-3" />
+                    Edit
+                  </button>
+                  <button
+                    @click="deleteCycle(cycle.id as string)"
+                    class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Trash2 class="w-3 h-3" />
+                    Delete
+                  </button>
                 </div>
               </div>
             </template>
