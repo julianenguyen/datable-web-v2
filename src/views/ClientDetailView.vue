@@ -86,6 +86,17 @@ async function createCycle() {
   }
 }
 
+async function deleteCycle(cycleId: string) {
+  if (!confirm('Delete this session cycle? This cannot be undone.')) return
+  try {
+    const { error } = await supabase.from('session_cycles').delete().eq('id', cycleId)
+    if (error) throw error
+    await loadSessionHistory()
+  } catch (e) {
+    console.error('Delete cycle error:', e)
+  }
+}
+
 async function saveCycleEdit(cycleId: string) {
   savingCycle.value = true
   try {
@@ -216,7 +227,8 @@ async function loadSessionHistory() {
     .select(`
       id, session_date, next_session_date, status,
       checkin_lists (id, status, sent_at),
-      presession_briefs (id, content, generated_at)
+      presession_briefs (id, content, generated_at),
+      session_summaries (id, themes, strategies, commitments, watch_fors, submitted_at)
     `)
     .eq('client_id', clientId)
     .order('session_date', { ascending: false })
@@ -368,7 +380,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         </div>
         <div class="flex items-center gap-2">
           <button
-            @click="router.push({ name: 'session-summary', params: { clientId } })"
+            @click="router.push({ name: 'session-summary', params: { clientId }, query: activeCycle ? { cycleId: activeCycle.id as string } : {} })"
             class="text-sm font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 px-4 py-2 rounded-lg transition-colors"
           >
             New Session Summary
@@ -838,6 +850,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           >
             <!-- View mode -->
             <div v-if="editingCycleId !== cycle.id" class="px-5 py-4">
+              <!-- Top row: metadata + actions -->
               <div class="flex items-start justify-between">
                 <div class="space-y-2">
                   <!-- Status badge -->
@@ -878,14 +891,55 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                   </div>
                 </div>
 
-                <!-- Edit button -->
-                <button
-                  @click="startEdit(cycle)"
-                  class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <Pencil class="w-3 h-3" />
-                  Edit
-                </button>
+                <!-- Edit / Delete buttons -->
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="startEdit(cycle)"
+                    class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Pencil class="w-3 h-3" />
+                    Edit
+                  </button>
+                  <button
+                    @click="deleteCycle(cycle.id as string)"
+                    class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Trash2 class="w-3 h-3" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              <!-- Post-session summary -->
+              <div v-if="(cycle.session_summaries as unknown[])?.length > 0" class="mt-4 pt-4 border-t border-gray-100">
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Post-Session Summary</p>
+                <div class="space-y-3">
+                  <div>
+                    <p class="text-xs text-gray-400 mb-1">What was discussed</p>
+                    <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).themes }}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-400 mb-1">Strategies & tools</p>
+                    <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).strategies }}</p>
+                  </div>
+                  <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).commitments">
+                    <p class="text-xs text-gray-400 mb-1">Client commitments</p>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="(c, i) in ((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[]"
+                        :key="i"
+                        class="flex items-start gap-2 text-sm text-gray-800"
+                      >
+                        <span class="text-teal-500 mt-0.5">•</span>
+                        {{ c }}
+                      </li>
+                    </ul>
+                  </div>
+                  <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors">
+                    <p class="text-xs text-gray-400 mb-1">Watch-fors</p>
+                    <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p>
+                  </div>
+                </div>
               </div>
             </div>
 

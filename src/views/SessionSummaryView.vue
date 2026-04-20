@@ -1,16 +1,24 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { Plus, X, ArrowLeft } from 'lucide-vue-next'
-import { MOCK_CLIENTS } from '@/data/mockClients'
 
 const router = useRouter()
 const route = useRoute()
 
 const clientId = route.params.clientId as string
-const client = MOCK_CLIENTS.find(c => c.id === clientId)
+const clientName = ref<string>('')
+
+onMounted(async () => {
+  const { data } = await supabase
+    .from('clients')
+    .select('name')
+    .eq('id', clientId)
+    .single()
+  if (data) clientName.value = data.name
+})
 
 const themes = ref('')
 const strategies = ref('')
@@ -102,7 +110,7 @@ async function handleSubmit() {
       <!-- Header -->
       <div class="mb-6">
         <h1 class="text-xl font-semibold text-gray-900">Post-Session Summary</h1>
-        <p v-if="client" class="text-sm text-gray-500 mt-0.5">{{ client.name }}</p>
+        <p v-if="clientName" class="text-sm text-gray-500 mt-0.5">{{ clientName }}</p>
       </div>
 
       <form @submit.prevent="handleSubmit" class="space-y-5">
