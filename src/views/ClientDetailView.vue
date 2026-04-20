@@ -30,6 +30,15 @@ const healthSummary = ref<{
 const sessionHistory = ref<Record<string, unknown>[]>([])
 const expandedCycles = ref<Set<string>>(new Set())
 
+// Pre-session reflection from patient
+const presessionReflection = ref<{
+  id: string
+  weekSummary: string | null
+  progress: string | null
+  agenda: string | null
+  submittedAt: string | null
+} | null>(null)
+
 // Brief generation
 const generatingBrief = ref(false)
 
@@ -160,13 +169,14 @@ onMounted(async () => {
     clientStatus.value = clientRow.status ?? 'active'
   }
 
-  await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory()])
+  await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory(), loadPresessionReflection()])
 
   // Real-time: reload on logs or commitment progress changes
   realtimeChannel = supabase
     .channel(`client-detail:${clientId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_logs', filter: `client_id=eq.${clientId}` }, () => { loadLogs() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'commitment_progress', filter: `client_id=eq.${clientId}` }, () => { loadSessionHistory() })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'presession_reflections', filter: `client_id=eq.${clientId}` }, () => { loadPresessionReflection() })
     .subscribe()
 })
 
@@ -228,6 +238,39 @@ async function loadSessionHistory() {
     .order('session_date', { ascending: false })
 
   sessionHistory.value = data ?? []
+}
+
+async function loadPresessionReflection() {
+  // Find the active cycle for this client
+  const activeCycle = (sessionHistory.value as { id: string; status: string }[]).find(c => c.status === 'active')
+  if (!activeCycle) {
+    // sessionHistory may not be loaded yet — query directly
+    const { data: cycle } = await supabase
+      .from('session_cycles')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('status', 'active')
+      .maybeSingle()
+    if (!cycle) { presessionReflection.value = null; return }
+    await fetchReflectionForCycle(cycle.id)
+  } else {
+    await fetchReflectionForCycle(activeCycle.id)
+  }
+}
+
+async function fetchReflectionForCycle(cycleId: string) {
+  const { data } = await supabase
+    .from('presession_reflections')
+    .select('id, week_summary, progress, agenda, submitted_at')
+    .eq('cycle_id', cycleId)
+    .maybeSingle()
+  presessionReflection.value = data ? {
+    id: data.id,
+    weekSummary: data.week_summary,
+    progress: data.progress,
+    agenda: data.agenda,
+    submittedAt: data.submitted_at,
+  } : null
 }
 
 async function generateBrief(cycleId: string) {
@@ -464,6 +507,33 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
 
       <!-- ── TAB 1: OVERVIEW ── -->
       <div v-if="activeTab === 'overview'" class="space-y-6">
+
+        <!-- Pre-Session Brief from patient -->
+        <div v-if="presessionReflection" class="bg-teal-50 border border-teal-200 rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-sm font-semibold text-teal-900">Pre-Session Reflection</h2>
+              <p class="text-xs text-teal-600 mt-0.5">
+                Submitted by patient{{ presessionReflection.submittedAt ? ` · ${formatDate(presessionReflection.submittedAt)}` : '' }}
+              </p>
+            </div>
+            <span class="text-xs bg-teal-100 text-teal-700 font-medium px-2.5 py-1 rounded-full">New</span>
+          </div>
+          <div class="space-y-3">
+            <div v-if="presessionReflection.weekSummary">
+              <p class="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">This past week</p>
+              <p class="text-sm text-gray-800">{{ presessionReflection.weekSummary }}</p>
+            </div>
+            <div v-if="presessionReflection.progress">
+              <p class="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">Progress on commitments</p>
+              <p class="text-sm text-gray-800">{{ presessionReflection.progress }}</p>
+            </div>
+            <div v-if="presessionReflection.agenda">
+              <p class="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">What they want to focus on</p>
+              <p class="text-sm text-gray-800">{{ presessionReflection.agenda }}</p>
+            </div>
+          </div>
+        </div>
 
         <!-- Focus Areas -->
         <div class="bg-white border border-gray-200 rounded-xl p-5">
