@@ -25,6 +25,10 @@ async function handleInvite() {
     error.value = 'Client name is required.'
     return
   }
+  if (!email.value.trim() && !phone.value.trim()) {
+    error.value = 'Please provide an email address or phone number so we can send the invite.'
+    return
+  }
   error.value = ''
   loading.value = true
 
@@ -33,7 +37,7 @@ async function handleInvite() {
     if (!user) throw new Error('Not authenticated.')
 
     // Create client record — this must succeed before anything else
-    const { error: clientError } = await supabase
+    const { data, error: clientError } = await supabase
       .from('clients')
       .insert({
         therapist_id: user.id,
@@ -42,19 +46,19 @@ async function handleInvite() {
         phone: phone.value.trim() || null,
         status: 'pending',
       })
+      .select('id')
+      .single()
 
     if (clientError) throw clientError
 
     // Try to send invite — failure here is non-fatal, client is already in DB
     try {
-      const { data } = await supabase.functions.invoke('send-client-invite', {
+      const { data: inviteData } = await supabase.functions.invoke('send-client-invite', {
         body: {
-          name: name.value.trim(),
-          email: email.value.trim() || null,
-          phone: phone.value.trim() || null,
+          clientId: data.id,
         },
       })
-      if (data?.inviteLink) inviteLink.value = data.inviteLink
+      if (inviteData?.inviteLink) inviteLink.value = inviteData.inviteLink
     } catch {
       deliveryWarning.value = 'Client added but invite delivery failed. Share the link below manually.'
     }

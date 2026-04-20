@@ -4,8 +4,8 @@
   /* Datable Brand Palette */
   --color-brand-green: #16A34A;
   --color-brand-sage: #B7BDA9;
-  --color-brand-teal: #0D9488;
-  --color-brand-teal-dark: #0F766E;
+  --color-brand-teal: #16796F;
+  --color-brand-teal-dark: #125F57;
 
   /* Core Surfaces */
   --color-background: #F5F7F5;
@@ -16,15 +16,15 @@
   --color-popover-foreground: #0D1F1D;
 
   /* Primary = Teal */
-  --color-primary: #0D9488;
+  --color-primary: #16796F;
   --color-primary-foreground: #FFFFFF;
 
   /* Secondary = Deep Teal */
-  --color-secondary: #0F766E;
+  --color-secondary: #125F57;
   --color-secondary-foreground: #FFFFFF;
 
-  /* Accent = Medium Teal */
-  --color-accent: #14B8A6;
+  /* Accent = Soft Teal */
+  --color-accent: #599d9c;
   --color-accent-foreground: #FFFFFF;
 
   /* Semantic */
@@ -38,7 +38,12 @@
   --color-muted-foreground: #4A5E5B;
   --color-border: #D1D8D4;
   --color-input: #D1D8D4;
-  --color-ring: #0D9488;
+  --color-ring: #16796F;
+
+  /* Tailwind teal scale overrides — makes bg-teal-*, text-teal-*, etc. use brand colors */
+  --color-teal-500: #599d9c;
+  --color-teal-600: #16796F;
+  --color-teal-700: #125F57;
 
   /* Glass surface */
   --color-glass: rgba(255, 255, 255, 0.78);
@@ -67,27 +72,27 @@
    ═══════════════════════════════════════════════ */
 
 .gradient-hero {
-  background: linear-gradient(135deg, #0D1F1D 0%, #0F766E 35%, #0D9488 70%, #14B8A6 100%);
+  background: linear-gradient(135deg, #0D1F1D 0%, #125F57 35%, #16796F 70%, #599d9c 100%);
 }
 
 .gradient-hero-deep {
-  background: linear-gradient(160deg, #0D1F1D 0%, #0D3B38 35%, #0F766E 65%, #0D9488 100%);
+  background: linear-gradient(160deg, #0D1F1D 0%, #0D3B38 35%, #125F57 65%, #16796F 100%);
 }
 
 .gradient-nav {
-  background: linear-gradient(90deg, #0D1F1D 0%, #0F3A35 50%, #0F766E 100%);
+  background: linear-gradient(90deg, #0D1F1D 0%, #0F3A35 50%, #125F57 100%);
 }
 
 .gradient-sidebar {
-  background: linear-gradient(180deg, #0D1F1D 0%, #0F3A35 60%, #0F766E 100%);
+  background: linear-gradient(180deg, #0D1F1D 0%, #0F3A35 60%, #125F57 100%);
 }
 
 .gradient-card-accent {
-  background: linear-gradient(135deg, rgba(13, 148, 136, 0.06) 0%, rgba(20, 184, 166, 0.04) 100%);
+  background: linear-gradient(135deg, rgba(22, 121, 111, 0.06) 0%, rgba(89, 157, 156, 0.04) 100%);
 }
 
 .gradient-auth {
-  background: linear-gradient(170deg, #0D1F1D 0%, #0F766E 30%, #0D9488 65%, #B7BDA9 100%);
+  background: linear-gradient(170deg, #0D1F1D 0%, #125F57 30%, #16796F 65%, #B7BDA9 100%);
 }
 
 /* ═══════════════════════════════════════════════
@@ -129,7 +134,7 @@
 }
 
 .card-elevated:hover {
-  border-color: rgba(13, 148, 136, 0.25);
+  border-color: rgba(22, 121, 111, 0.25);
   box-shadow:
     0 2px 8px rgba(13, 31, 29, 0.06),
     0 8px 24px rgba(13, 31, 29, 0.05);
@@ -140,15 +145,15 @@
   border: 1px solid rgba(209, 216, 212, 0.5);
   box-shadow:
     0 1px 3px rgba(13, 31, 29, 0.04),
-    0 0 0 1px rgba(13, 148, 136, 0.06);
+    0 0 0 1px rgba(22, 121, 111, 0.06);
   border-radius: 1.125rem;
   transition: all 0.2s ease;
 }
 
 .card-glow:hover {
   box-shadow:
-    0 4px 16px rgba(13, 148, 136, 0.12),
-    0 0 0 1px rgba(13, 148, 136, 0.12);
+    0 4px 16px rgba(22, 121, 111, 0.12),
+    0 0 0 1px rgba(22, 121, 111, 0.12);
 }
 
 /* ═══════════════════════════════════════════════
@@ -167,12 +172,17 @@
   font-size: 2.25rem;
   font-weight: 800;
   line-height: 1;
-  color: #0D9488;
+  color: #16796F;
 }
 
 /* ═══════════════════════════════════════════════
    ANIMATIONS
    ═══════════════════════════════════════════════ */
+
+/* Tints a dark/black PNG logo to #16796F brand teal */
+.logo-teal {
+  filter: brightness(0) saturate(100%) invert(35%) sepia(68%) saturate(500%) hue-rotate(143deg) brightness(93%) contrast(90%);
+}
 
 .fade-enter-active,
 .fade-leave-active {

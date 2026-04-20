@@ -15,6 +15,9 @@ const resendLoading = ref(false)
 const resendSuccess = ref(false)
 const resendCooldown = ref(0)
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
+// Guard against double-redirect: onMounted and onAuthStateChange can both fire
+// if the user lands on this page with an existing session.
+let redirecting = false
 
 async function resendEmail() {
   if (resendCooldown.value > 0 || !email.value) return
@@ -38,9 +41,13 @@ async function resendEmail() {
   }
 }
 
-// Listen for email verification → redirect to onboarding
+// Listen for email verification → redirect to onboarding.
+// Guard with `redirecting` so onMounted and this listener don't both fire a
+// loadProgress + push when the user lands here with an existing session.
 const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
   if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+    if (redirecting) return
+    redirecting = true
     auth.user = session.user as typeof auth.user
     await onboarding.loadProgress(session.user.id)
     router.push('/onboarding/practice')
@@ -53,8 +60,11 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
-  // If already authenticated (e.g. after email confirm redirect), redirect immediately
+  // If already authenticated when this page mounts (e.g. browser refresh after
+  // confirming email), redirect immediately — onAuthStateChange won't fire SIGNED_IN.
   if (auth.isAuthenticated && auth.user) {
+    if (redirecting) return
+    redirecting = true
     onboarding.loadProgress(auth.user.id).then(() => {
       router.push('/onboarding/practice')
     })
