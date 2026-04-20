@@ -241,21 +241,17 @@ async function loadSessionHistory() {
 }
 
 async function loadPresessionReflection() {
-  // Find the active cycle for this client
-  const activeCycle = (sessionHistory.value as { id: string; status: string }[]).find(c => c.status === 'active')
-  if (!activeCycle) {
-    // sessionHistory may not be loaded yet — query directly
-    const { data: cycle } = await supabase
-      .from('session_cycles')
-      .select('id')
-      .eq('client_id', clientId)
-      .eq('status', 'active')
-      .maybeSingle()
-    if (!cycle) { presessionReflection.value = null; return }
-    await fetchReflectionForCycle(cycle.id)
-  } else {
-    await fetchReflectionForCycle(activeCycle.id)
-  }
+  // Find the most recent active cycle — avoid maybeSingle() which errors on multiple rows
+  const { data: cycles } = await supabase
+    .from('session_cycles')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const cycle = cycles?.[0]
+  if (!cycle) { presessionReflection.value = null; return }
+  await fetchReflectionForCycle(cycle.id)
 }
 
 async function fetchReflectionForCycle(cycleId: string) {
