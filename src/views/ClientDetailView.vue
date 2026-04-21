@@ -49,12 +49,172 @@ const archiving = ref(false)
 const archiveError = ref<string | null>(null)
 const unarchiving = ref(false)
 
-// Session cycle management
+// Session cycle management (kept for summaries/reflections)
 const showNewCycleForm = ref(false)
 const savingCycle = ref(false)
 const editingCycleId = ref<string | null>(null)
 const newCycle = ref({ session_date: '', next_session_date: '' })
 const editCycle = ref({ session_date: '', next_session_date: '', status: 'active' })
+
+// ── New sessions scheduling ──────────────────────────────────────────────────
+interface ScheduledSession {
+  id: string
+  session_date: string
+  session_time: string | null
+  status: 'scheduled' | 'completed' | 'cancelled'
+  series_id: string | null
+  recurrence_rule: string | null
+  notes: string | null
+}
+
+const sessions = ref<ScheduledSession[]>([])
+const sessionsLoading = ref(false)
+const showScheduleModal = ref(false)
+const savingSession = ref(false)
+
+// Calendar
+const calendarYear = ref(new Date().getFullYear())
+const calendarMonth = ref(new Date().getMonth()) // 0-indexed
+
+// Schedule form
+const scheduleForm = ref({
+  date: '',
+  time: '',
+  recurrence: 'none' as 'none' | 'weekly' | 'biweekly' | 'monthly',
+  endDate: '',
+})
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+const calendarDays = computed(() => {
+  const year = calendarYear.value
+  const month = calendarMonth.value
+  const firstDay = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const days: (number | null)[] = Array(firstDay).fill(null)
+  for (let d = 1; d <= daysInMonth; d++) days.push(d)
+  return days
+})
+
+const sessionDateSet = computed(() => {
+  const set = new Set<string>()
+  for (const s of sessions.value) {
+    if (s.status !== 'cancelled') set.add(s.session_date)
+  }
+  return set
+})
+
+function calendarDateStr(day: number) {
+  const m = String(calendarMonth.value + 1).padStart(2, '0')
+  const d = String(day).padStart(2, '0')
+  return `${calendarYear.value}-${m}-${d}`
+}
+
+function prevMonth() {
+  if (calendarMonth.value === 0) { calendarYear.value--; calendarMonth.value = 11 }
+  else calendarMonth.value--
+}
+
+function nextMonth() {
+  if (calendarMonth.value === 11) { calendarYear.value++; calendarMonth.value = 0 }
+  else calendarMonth.value++
+}
+
+function sessionsOnDay(day: number) {
+  const dateStr = calendarDateStr(day)
+  return sessions.value.filter(s => s.session_date === dateStr && s.status !== 'cancelled')
+}
+
+async function loadSessions() {
+  sessionsLoading.value = true
+  const { data } = await supabase
+    .from('sessions')
+    .select('id, session_date, session_time, status, series_id, recurrence_rule, notes')
+    .eq('client_id', clientId)
+    .order('session_date', { ascending: true })
+  sessions.value = (data ?? []) as ScheduledSession[]
+  sessionsLoading.value = false
+}
+
+function expandDates(startDate: string, recurrence: string, endDate: string): string[] {
+  const dates: string[] = []
+  const end = new Date(endDate + 'T12:00:00')
+  let current = new Date(startDate + 'T12:00:00')
+  const stepDays = recurrence === 'weekly' ? 7 : recurrence === 'biweekly' ? 14 : 0
+  while (current <= end) {
+    dates.push(current.toISOString().split('T')[0])
+    if (stepDays > 0) {
+      current = new Date(current.getTime() + stepDays * 86400000)
+    } else {
+      // monthly
+      const next = new Date(current)
+      next.setMonth(next.getMonth() + 1)
+      current = next
+    }
+  }
+  return dates
+}
+
+async function saveSchedule() {
+  if (!scheduleForm.value.date) return
+  savingSession.value = true
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not authenticated')
+
+    const isRecurring = scheduleForm.value.recurrence !== 'none' && scheduleForm.value.endDate
+    const seriesId = isRecurring ? crypto.randomUUID() : null
+
+    if (isRecurring) {
+      const dates = expandDates(scheduleForm.value.date, scheduleForm.value.recurrence, scheduleForm.value.endDate)
+      const rows = dates.map(d => ({
+        client_id: clientId,
+        therapist_id: user.id,
+        session_date: d,
+        session_time: scheduleForm.value.time || null,
+        recurrence_rule: scheduleForm.value.recurrence,
+        series_id: seriesId,
+      }))
+      const { error } = await supabase.from('sessions').insert(rows)
+      if (error) throw error
+    } else {
+      const { error } = await supabase.from('sessions').insert({
+        client_id: clientId,
+        therapist_id: user.id,
+        session_date: scheduleForm.value.date,
+        session_time: scheduleForm.value.time || null,
+      })
+      if (error) throw error
+    }
+
+    scheduleForm.value = { date: '', time: '', recurrence: 'none', endDate: '' }
+    showScheduleModal.value = false
+    await loadSessions()
+    // navigate calendar to the scheduled month
+    const d = new Date(scheduleForm.value.date || sessions.value[0]?.session_date)
+    if (!isNaN(d.getTime())) {
+      calendarYear.value = d.getFullYear()
+      calendarMonth.value = d.getMonth()
+    }
+  } catch (e) {
+    console.error('Save session error:', e)
+  } finally {
+    savingSession.value = false
+  }
+}
+
+async function cancelSession(sessionId: string, wholeSeriesId: string | null) {
+  const cancelAll = wholeSeriesId
+    ? confirm('Cancel just this session, or all future sessions in this series?\n\nOK = cancel entire series\nCancel = cancel just this one')
+    : false
+
+  if (cancelAll && wholeSeriesId) {
+    await supabase.from('sessions').update({ status: 'cancelled' }).eq('series_id', wholeSeriesId).eq('status', 'scheduled')
+  } else {
+    await supabase.from('sessions').update({ status: 'cancelled' }).eq('id', sessionId)
+  }
+  await loadSessions()
+}
 
 function startEdit(cycle: Record<string, unknown>) {
   editingCycleId.value = cycle.id as string
@@ -169,7 +329,7 @@ onMounted(async () => {
     clientStatus.value = clientRow.status ?? 'active'
   }
 
-  await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory(), loadPresessionReflection()])
+  await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory(), loadPresessionReflection(), loadSessions()])
 
   // Real-time: reload on logs or commitment progress changes
   realtimeChannel = supabase
@@ -177,6 +337,7 @@ onMounted(async () => {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_logs', filter: `client_id=eq.${clientId}` }, () => { loadLogs() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'commitment_progress', filter: `client_id=eq.${clientId}` }, () => { loadSessionHistory() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'presession_reflections', filter: `client_id=eq.${clientId}` }, () => { loadPresessionReflection() })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions', filter: `client_id=eq.${clientId}` }, () => { loadSessions() })
     .subscribe()
 })
 
@@ -828,283 +989,239 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
       </div>
 
       <!-- ── TAB 3: SESSION HISTORY ── -->
-      <div v-else-if="activeTab === 'history'">
+      <div v-else-if="activeTab === 'history'" class="space-y-6">
 
-        <!-- Header row -->
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <p class="text-sm text-gray-500">Manage session cycles and scheduled dates</p>
-          </div>
-          <button
-            @click="showNewCycleForm = !showNewCycleForm"
-            class="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
-          >
-            <Plus class="w-4 h-4" />
-            Schedule Session
-          </button>
-        </div>
-
-        <!-- New cycle form -->
-        <div v-if="showNewCycleForm" class="bg-teal-50 border border-teal-200 rounded-xl p-5 mb-4">
-          <p class="text-sm font-semibold text-teal-800 mb-4">New Session Cycle</p>
-          <div class="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Session date</label>
-              <input
-                v-model="newCycle.session_date"
-                type="date"
-                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <p class="text-xs text-gray-400 mt-1">When did / will the session happen?</p>
+        <!-- ── Calendar ── -->
+        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <!-- Calendar header -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div class="flex items-center gap-3">
+              <button @click="prevMonth" class="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+              </button>
+              <h2 class="text-sm font-semibold text-gray-900 w-36 text-center">{{ MONTH_NAMES[calendarMonth] }} {{ calendarYear }}</h2>
+              <button @click="nextMonth" class="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+              </button>
             </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Next session date</label>
-              <input
-                v-model="newCycle.next_session_date"
-                type="date"
-                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <p class="text-xs text-gray-400 mt-1">Shows in client's app as upcoming session</p>
-            </div>
-          </div>
-          <div class="flex gap-2">
             <button
-              @click="createCycle"
-              :disabled="savingCycle"
-              class="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              @click="showScheduleModal = true"
+              class="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
             >
-              <span v-if="savingCycle" class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              <Check v-else class="w-3.5 h-3.5" />
-              {{ savingCycle ? 'Saving…' : 'Create Cycle' }}
-            </button>
-            <button
-              @click="showNewCycleForm = false"
-              class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-4 py-2 rounded-lg transition-colors"
-            >
-              <X class="w-3.5 h-3.5" />
-              Cancel
+              <Plus class="w-4 h-4" />
+              Schedule Session
             </button>
           </div>
-        </div>
 
-        <!-- Empty state -->
-        <div v-if="sessionHistory.length === 0" class="text-center py-12 text-gray-400">
-          <p class="text-sm font-medium mb-1">No sessions scheduled yet</p>
-          <p class="text-xs">Click "Schedule Session" to create the first cycle.</p>
-        </div>
+          <!-- Day-of-week headers -->
+          <div class="grid grid-cols-7 border-b border-gray-100">
+            <div v-for="d in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="d"
+              class="py-2 text-center text-xs font-medium text-gray-400">{{ d }}</div>
+          </div>
 
-        <!-- Cycle list -->
-        <div v-else class="space-y-3">
-          <div
-            v-for="cycle in sessionHistory"
-            :key="cycle.id as string"
-            class="bg-white border rounded-xl overflow-hidden"
-            :class="cycle.status === 'active' ? 'border-teal-200' : 'border-gray-200'"
-          >
-            <!-- View mode -->
-            <template v-if="editingCycleId !== cycle.id">
-              <!-- Collapsed header (always visible) — click to expand -->
-              <button
-                class="w-full px-5 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors text-left"
-                @click="toggleCycle(cycle.id as string)"
-              >
-                <div class="flex items-center gap-3 min-w-0">
-                  <!-- Status badge -->
+          <!-- Calendar grid -->
+          <div class="grid grid-cols-7">
+            <div
+              v-for="(day, i) in calendarDays"
+              :key="i"
+              class="min-h-16 border-b border-r border-gray-50 p-1.5 last:border-r-0"
+              :class="{ 'bg-gray-50/50': !day }"
+            >
+              <template v-if="day">
+                <div class="flex items-start justify-between">
                   <span
-                    class="shrink-0 inline-flex text-xs px-2.5 py-0.5 rounded-full font-medium"
-                    :class="cycle.status === 'active' ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-gray-100 text-gray-500'"
+                    class="text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full"
+                    :class="calendarDateStr(day) === new Date().toISOString().split('T')[0]
+                      ? 'bg-teal-600 text-white'
+                      : 'text-gray-700'"
+                  >{{ day }}</span>
+                </div>
+                <!-- Session dots -->
+                <div v-if="sessionsOnDay(day).length > 0" class="mt-1 space-y-0.5">
+                  <div
+                    v-for="s in sessionsOnDay(day)"
+                    :key="s.id"
+                    class="group relative flex items-center gap-1 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded px-1.5 py-0.5 cursor-default transition-colors"
                   >
-                    {{ cycle.status === 'active' ? 'Active' : 'Closed' }}
-                  </span>
-
-                  <!-- Date -->
-                  <span class="text-sm font-medium text-gray-900 shrink-0">
-                    {{ cycle.session_date ? formatDate(cycle.session_date as string) : 'No date' }}
-                  </span>
-
-                  <!-- Summary chips (visible when collapsed) -->
-                  <template v-if="(cycle.session_summaries as unknown[])?.length > 0">
-                    <span class="text-gray-200">·</span>
-                    <!-- Themes chip -->
-                    <span class="shrink-0 inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                      📝 Summary
+                    <span class="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0"></span>
+                    <span class="text-xs text-teal-700 truncate">
+                      {{ s.session_time ? s.session_time.slice(0,5) : 'Session' }}
                     </span>
-                    <!-- Action items chip -->
+                    <!-- Cancel button on hover -->
+                    <button
+                      @click.stop="cancelSession(s.id, s.series_id)"
+                      class="ml-auto opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all text-xs leading-none"
+                      title="Cancel session"
+                    >✕</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Upcoming sessions list ── -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Upcoming Sessions</h3>
+          <div v-if="sessionsLoading" class="text-sm text-gray-400 py-4 text-center">Loading…</div>
+          <div v-else-if="sessions.filter(s => s.session_date >= new Date().toISOString().split('T')[0] && s.status === 'scheduled').length === 0"
+            class="text-sm text-gray-400 py-4 text-center">No upcoming sessions scheduled.</div>
+          <div v-else class="space-y-2">
+            <div
+              v-for="s in sessions.filter(s => s.session_date >= new Date().toISOString().split('T')[0] && s.status === 'scheduled').slice(0, 8)"
+              :key="s.id"
+              class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-center shrink-0">
+                  <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-gray-900">{{ formatDate(s.session_date) }}</p>
+                  <p class="text-xs text-gray-400">
+                    {{ s.session_time ? s.session_time.slice(0,5) : 'No time set' }}
+                    <span v-if="s.recurrence_rule" class="ml-2 capitalize">· {{ s.recurrence_rule }}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                @click="cancelSession(s.id, s.series_id)"
+                class="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded"
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Post-session summaries ── -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Session Notes</h3>
+          <div v-if="sessionHistory.length === 0" class="text-sm text-gray-400 py-4 text-center">
+            No session notes yet. Submit a post-session summary after a session.
+          </div>
+          <div v-else class="space-y-3">
+            <div
+              v-for="cycle in sessionHistory"
+              :key="cycle.id as string"
+              class="bg-white border rounded-xl overflow-hidden"
+              :class="(cycle.session_summaries as unknown[])?.length > 0 ? 'border-gray-200' : 'border-gray-100'"
+            >
+              <template v-if="(cycle.session_summaries as unknown[])?.length > 0">
+                <button
+                  class="w-full px-5 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors text-left"
+                  @click="toggleCycle(cycle.id as string)"
+                >
+                  <div class="flex items-center gap-3 min-w-0">
+                    <span class="text-sm font-medium text-gray-900 shrink-0">
+                      {{ cycle.session_date ? formatDate(cycle.session_date as string) : 'No date' }}
+                    </span>
+                    <span class="shrink-0 inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">📝 Summary</span>
                     <template v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[] | undefined">
                       <span
                         class="shrink-0 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
-                        :class="
-                          ((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress &&
-                          (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[]).filter((p: Record<string, unknown>) => p.status === 'completed').length ===
-                          ((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as unknown as number
-                            ? 'bg-green-50 text-green-700'
-                            : (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.some((p: Record<string, unknown>) => p.status === 'in_progress' || p.status === 'completed')
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-gray-100 text-gray-500'
-                        "
+                        :class="(((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.some((p: Record<string, unknown>) => p.status === 'completed') ? 'bg-green-50 text-green-700' : (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.some((p: Record<string, unknown>) => p.status === 'in_progress') ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'"
                       >
                         ✓ {{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.filter((p: Record<string, unknown>) => p.status === 'completed').length ?? 0 }}/{{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[]).length }} done
                       </span>
                     </template>
-                    <!-- Watch-fors chip -->
-                    <span
-                      v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors"
-                      class="shrink-0 inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full"
-                    >
-                      👁 Watch-fors
-                    </span>
-                  </template>
-                </div>
-
-                <div class="flex items-center gap-2 shrink-0">
-                  <ChevronDown v-if="!expandedCycles.has(cycle.id as string)" class="w-4 h-4 text-gray-400" />
-                  <ChevronUp v-else class="w-4 h-4 text-gray-400" />
-                </div>
-              </button>
-
-              <!-- Expanded detail -->
-              <div v-if="expandedCycles.has(cycle.id as string)" class="px-5 pb-5 border-t border-gray-100 pt-4 space-y-4">
-                <!-- Dates + brief link -->
-                <div class="flex items-center gap-6 text-sm">
-                  <div>
-                    <span class="text-xs text-gray-400 block mb-0.5">Session date</span>
-                    <span class="font-medium text-gray-900">{{ cycle.session_date ? formatDate(cycle.session_date as string) : '—' }}</span>
+                    <span v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors" class="shrink-0 inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">👁 Watch-fors</span>
                   </div>
-                  <div class="text-gray-300">→</div>
-                  <div>
-                    <span class="text-xs text-gray-400 block mb-0.5">Next session</span>
-                    <span class="font-medium text-gray-900">{{ cycle.next_session_date ? formatDate(cycle.next_session_date as string) : '—' }}</span>
-                  </div>
-                  <div v-if="(cycle.presession_briefs as unknown[])?.length > 0" class="ml-auto">
-                    <button
-                      @click="router.push({ name: 'presession-brief', params: { clientId }, query: { briefId: String(((cycle.presession_briefs as Record<string, unknown>[])[0]).id) } })"
-                      class="text-xs text-teal-600 hover:text-teal-700 font-medium"
-                    >
-                      View pre-session brief →
-                    </button>
-                  </div>
-                </div>
+                  <ChevronDown v-if="!expandedCycles.has(cycle.id as string)" class="w-4 h-4 text-gray-400 shrink-0" />
+                  <ChevronUp v-else class="w-4 h-4 text-gray-400 shrink-0" />
+                </button>
 
-                <!-- Post-session summary -->
-                <div v-if="(cycle.session_summaries as unknown[])?.length > 0" class="space-y-4">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Post-Session Summary</p>
-
-                  <div>
-                    <p class="text-xs text-gray-400 mb-1">What was discussed</p>
-                    <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).themes }}</p>
-                  </div>
-
-                  <div>
-                    <p class="text-xs text-gray-400 mb-1">Strategies & tools</p>
-                    <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).strategies }}</p>
-                  </div>
-
+                <div v-if="expandedCycles.has(cycle.id as string)" class="px-5 pb-5 border-t border-gray-100 pt-4 space-y-4">
+                  <div><p class="text-xs text-gray-400 mb-1">What was discussed</p><p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).themes }}</p></div>
+                  <div><p class="text-xs text-gray-400 mb-1">Strategies & tools</p><p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).strategies }}</p></div>
                   <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).commitments">
                     <p class="text-xs text-gray-400 mb-2">Client commitments</p>
                     <ul class="space-y-2">
-                      <li
-                        v-for="(c, i) in ((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[]"
-                        :key="i"
-                        class="flex items-start gap-2.5"
-                      >
-                        <span
-                          class="shrink-0 inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 whitespace-nowrap"
+                      <li v-for="(c, i) in ((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[]" :key="i" class="flex items-start gap-2.5">
+                        <span class="shrink-0 inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 whitespace-nowrap"
                           :class="{
                             'bg-green-50 text-green-700': (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'completed',
                             'bg-amber-50 text-amber-700': (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'in_progress',
-                            'bg-gray-100 text-gray-500': !(((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i) || (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'not_started',
-                          }"
-                        >
-                          {{
-                            (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'completed' ? '✓ Done'
-                            : (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'in_progress' ? '⏳ In progress'
-                            : '— Not started'
-                          }}
+                            'bg-gray-100 text-gray-500': !(((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i),
+                          }">
+                          {{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'completed' ? '✓ Done' : (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'in_progress' ? '⏳ In progress' : '— Not started' }}
                         </span>
                         <span class="text-sm text-gray-800 leading-relaxed">{{ c }}</span>
                       </li>
                     </ul>
                   </div>
-
-                  <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors">
-                    <p class="text-xs text-gray-400 mb-1">Watch-fors</p>
-                    <p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p>
+                  <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors"><p class="text-xs text-gray-400 mb-1">Watch-fors</p><p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p></div>
+                  <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
+                    <button @click="deleteCycle(cycle.id as string)" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors">
+                      <Trash2 class="w-3 h-3" />Delete
+                    </button>
                   </div>
                 </div>
-
-                <!-- Edit / Delete -->
-                <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
-                  <button
-                    @click="startEdit(cycle)"
-                    class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <Pencil class="w-3 h-3" />
-                    Edit
-                  </button>
-                  <button
-                    @click="deleteCycle(cycle.id as string)"
-                    class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <Trash2 class="w-3 h-3" />
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </template>
-
-            <!-- Edit mode -->
-            <div v-else class="px-5 py-4 bg-gray-50">
-              <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Editing cycle</p>
-              <div class="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Session date</label>
-                  <input
-                    v-model="editCycle.session_date"
-                    type="date"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Next session date</label>
-                  <input
-                    v-model="editCycle.next_session_date"
-                    type="date"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-                  />
-                </div>
-              </div>
-              <div class="mb-4">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
-                <select
-                  v-model="editCycle.status"
-                  class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-                >
-                  <option value="active">Active</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
-              <div class="flex gap-2">
-                <button
-                  @click="saveCycleEdit(cycle.id as string)"
-                  :disabled="savingCycle"
-                  class="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                >
-                  <span v-if="savingCycle" class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  <Check v-else class="w-3.5 h-3.5" />
-                  {{ savingCycle ? 'Saving…' : 'Save Changes' }}
-                </button>
-                <button
-                  @click="cancelEdit"
-                  class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-4 py-2 rounded-lg transition-colors"
-                >
-                  <X class="w-3.5 h-3.5" />
-                  Cancel
-                </button>
-              </div>
+              </template>
             </div>
           </div>
         </div>
+
       </div>
+
+      <!-- ── Schedule Session Modal ── -->
+      <Teleport to="body">
+        <div v-if="showScheduleModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showScheduleModal = false">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div class="flex items-center justify-between mb-5">
+              <h2 class="text-base font-semibold text-gray-900">Schedule Session</h2>
+              <button @click="showScheduleModal = false" class="text-gray-400 hover:text-gray-600"><X class="w-5 h-5" /></button>
+            </div>
+
+            <div class="space-y-4">
+              <!-- Date -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Date <span class="text-red-500">*</span></label>
+                <input v-model="scheduleForm.date" type="date" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+
+              <!-- Time (optional) -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Time <span class="text-xs font-normal text-gray-400">(optional)</span></label>
+                <input v-model="scheduleForm.time" type="time" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+
+              <!-- Recurrence -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Repeat</label>
+                <div class="grid grid-cols-4 gap-2">
+                  <button
+                    v-for="opt in [{ value: 'none', label: 'Once' }, { value: 'weekly', label: 'Weekly' }, { value: 'biweekly', label: 'Bi-weekly' }, { value: 'monthly', label: 'Monthly' }]"
+                    :key="opt.value"
+                    @click="scheduleForm.recurrence = opt.value as 'none' | 'weekly' | 'biweekly' | 'monthly'"
+                    class="py-2 text-xs font-medium rounded-xl border transition-colors"
+                    :class="scheduleForm.recurrence === opt.value ? 'bg-teal-600 text-white border-teal-600' : 'text-gray-600 border-gray-200 hover:border-teal-300'"
+                  >{{ opt.label }}</button>
+                </div>
+              </div>
+
+              <!-- End date for recurring -->
+              <div v-if="scheduleForm.recurrence !== 'none'">
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Repeat until <span class="text-red-500">*</span></label>
+                <input v-model="scheduleForm.endDate" type="date" :min="scheduleForm.date" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                <p v-if="scheduleForm.date && scheduleForm.endDate" class="text-xs text-gray-400 mt-1">
+                  Creates {{ expandDates(scheduleForm.date, scheduleForm.recurrence, scheduleForm.endDate).length }} sessions
+                </p>
+              </div>
+            </div>
+
+            <div class="flex gap-2 mt-6">
+              <button
+                @click="saveSchedule"
+                :disabled="savingSession || !scheduleForm.date || (scheduleForm.recurrence !== 'none' && !scheduleForm.endDate)"
+                class="flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+              >
+                <span v-if="savingSession" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                {{ savingSession ? 'Saving…' : 'Schedule' }}
+              </button>
+              <button @click="showScheduleModal = false" class="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
     </div>
   </AppLayout>
 </template>
