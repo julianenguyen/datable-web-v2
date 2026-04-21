@@ -1166,9 +1166,21 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
       <Teleport to="body">
         <div v-if="showScheduleModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showScheduleModal = false">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <div class="flex items-center justify-between mb-5">
+            <div class="flex items-center justify-between mb-4">
               <h2 class="text-base font-semibold text-gray-900">Schedule Session</h2>
               <button @click="showScheduleModal = false" class="text-gray-400 hover:text-gray-600"><X class="w-5 h-5" /></button>
+            </div>
+
+            <!-- Patient pill -->
+            <div class="flex items-center gap-2.5 bg-teal-50 border border-teal-200 rounded-xl px-3.5 py-2.5 mb-5">
+              <div class="w-7 h-7 rounded-full bg-teal-600 flex items-center justify-center shrink-0">
+                <span class="text-white text-xs font-bold">{{ clientName.charAt(0).toUpperCase() }}</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-semibold text-teal-900 truncate">{{ clientName }}</p>
+                <p class="text-xs text-teal-600">Session will appear on their app immediately</p>
+              </div>
+              <svg class="w-4 h-4 text-teal-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
             </div>
 
             <div class="space-y-4">
