@@ -204,8 +204,10 @@ async function saveSchedule() {
 }
 
 async function cancelSession(sessionId: string, wholeSeriesId: string | null) {
+  if (!confirm('Are you sure you want to cancel this session?')) return
+
   const cancelAll = wholeSeriesId
-    ? confirm('Cancel just this session, or all future sessions in this series?\n\nOK = cancel entire series\nCancel = cancel just this one')
+    ? confirm('Cancel all future sessions in this series too?\n\nOK = cancel entire series\nCancel = cancel just this one')
     : false
 
   if (cancelAll && wholeSeriesId) {
