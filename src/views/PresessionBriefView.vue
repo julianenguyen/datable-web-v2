@@ -20,10 +20,11 @@ interface BriefContent {
   biometric_summary: string
   suggested_openers: string[]
   wheel_summary: Record<string, { count: number; subcategories: string[]; notes: string[] }>
-  client_reflection?: { week_summary: string; progress: string; agenda: string }
+  client_reflection?: { week_summary: string; progress: string; agenda: string; session_intent?: string | null }
 }
 
-const brief = ref<{ content: BriefContent; therapist_notes: string | null; generated_at: string } | null>(null)
+const brief = ref<{ content: BriefContent; therapist_notes: string | null; generated_at: string; cycle_id: string } | null>(null)
+const sessionIntent = ref<string | null>(null)
 const therapistNotes = ref('')
 const savingNotes = ref(false)
 const loading = ref(true)
@@ -32,7 +33,7 @@ onMounted(async () => {
   if (!briefId) { loading.value = false; return }
   const { data } = await supabase
     .from('presession_briefs')
-    .select('content, therapist_notes, generated_at')
+    .select('content, therapist_notes, generated_at, cycle_id')
     .eq('id', briefId)
     .single()
 
@@ -40,6 +41,19 @@ onMounted(async () => {
     brief.value = data as typeof brief.value
     therapistNotes.value = data.therapist_notes ?? ''
     logPhiAccess(clientId, 'presession_brief', 'read', briefId)
+
+    // session_intent may be embedded in content (new briefs) or fetched from reflections (all briefs)
+    const embeddedIntent = data.content?.client_reflection?.session_intent
+    if (embeddedIntent) {
+      sessionIntent.value = embeddedIntent
+    } else {
+      const { data: reflection } = await supabase
+        .from('presession_reflections')
+        .select('session_intent')
+        .eq('cycle_id', data.cycle_id)
+        .maybeSingle()
+      sessionIntent.value = reflection?.session_intent ?? null
+    }
   }
   loading.value = false
 })
@@ -83,6 +97,16 @@ const wheelCategories = Object.entries(WHEEL_OF_LIFE)
 
       <template v-else-if="brief">
         <div class="space-y-5">
+
+          <!-- Session intent callout -->
+          <div
+            v-if="sessionIntent"
+            style="background-color: #E8F5F4; border-left: 3px solid #16796F;"
+            class="rounded-xl px-5 py-4"
+          >
+            <p class="text-xs font-semibold uppercase tracking-wide mb-1" style="color: #16796F;">Session Intent</p>
+            <p style="font-size: 14px; color: #1f2937;">Coming in today wanting: <span class="font-medium">{{ sessionIntent }}</span></p>
+          </div>
 
           <!-- Cycle summary -->
           <div class="bg-white border border-gray-200 rounded-xl p-5">
