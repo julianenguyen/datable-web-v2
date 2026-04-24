@@ -449,12 +449,21 @@ async function generateBrief(cycleId: string) {
     const { data, error } = await supabase.functions.invoke('generate-presession-brief', {
       body: { clientId, cycleId },
     })
-    if (error) throw error
+    if (error) {
+      // Extract the actual error body from the edge function response
+      let msg = error.message
+      try {
+        const body = await (error as any).context?.json?.()
+        if (body?.error) msg = body.error
+      } catch { /* ignore */ }
+      briefError.value = msg
+      return
+    }
     briefData.value = data.brief
     drawerOpen.value = true
   } catch (err) {
     console.error('Brief generation error:', err)
-    briefError.value = 'Failed to generate brief. Please try again.'
+    briefError.value = String(err)
   } finally {
     generatingBrief.value = false
   }
