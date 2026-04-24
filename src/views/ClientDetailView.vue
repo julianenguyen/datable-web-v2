@@ -1198,6 +1198,12 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                   </div>
                   <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors"><p class="text-xs text-gray-400 mb-1">Watch-fors</p><p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p></div>
                   <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      @click="router.push({ name: 'session-summary', params: { clientId }, query: { cycleId: cycle.id as string, summaryId: ((cycle.session_summaries as Record<string, unknown>[])[0]).id as string } })"
+                      class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Pencil class="w-3 h-3" />Edit
+                    </button>
                     <button @click="deleteCycle(cycle.id as string)" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors">
                       <Trash2 class="w-3 h-3" />Delete
                     </button>

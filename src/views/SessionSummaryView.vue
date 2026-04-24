@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
@@ -9,17 +9,11 @@ const router = useRouter()
 const route = useRoute()
 
 const clientId = route.params.clientId as string
+const cycleId = route.query.cycleId as string | undefined
+const summaryId = route.query.summaryId as string | undefined
+const isEditing = computed(() => !!summaryId)
+
 const clientName = ref<string>('')
-
-onMounted(async () => {
-  const { data } = await supabase
-    .from('clients')
-    .select('name')
-    .eq('id', clientId)
-    .single()
-  if (data) clientName.value = data.name
-})
-
 const themes = ref('')
 const strategies = ref('')
 const commitments = ref<string[]>([''])
@@ -28,6 +22,30 @@ const notes = ref('')
 const loading = ref(false)
 const submitted = ref(false)
 const error = ref('')
+
+onMounted(async () => {
+  const { data } = await supabase
+    .from('clients')
+    .select('name')
+    .eq('id', clientId)
+    .single()
+  if (data) clientName.value = data.name
+
+  if (summaryId) {
+    const { data: summary } = await supabase
+      .from('session_summaries')
+      .select('themes, strategies, commitments, watch_fors, notes')
+      .eq('id', summaryId)
+      .single()
+    if (summary) {
+      themes.value = summary.themes ?? ''
+      strategies.value = summary.strategies ?? ''
+      commitments.value = (summary.commitments as string[]).length > 0 ? summary.commitments as string[] : ['']
+      watchFors.value = summary.watch_fors ?? ''
+      notes.value = summary.notes ?? ''
+    }
+  }
+})
 
 function addCommitment() {
   commitments.value.push('')
@@ -50,42 +68,56 @@ async function handleSubmit() {
   loading.value = true
 
   try {
-    // 1. Create or use existing session cycle
-    let cycleId = route.query.cycleId as string | undefined
-
-    if (!cycleId) {
-      const { data: cycle, error: cycleError } = await supabase
-        .from('session_cycles')
-        .insert({
-          client_id: clientId,
-          therapist_id: (await supabase.auth.getUser()).data.user?.id,
-          session_date: new Date().toISOString().split('T')[0],
-          status: 'active',
+    if (isEditing.value) {
+      // Update existing summary
+      const { error: updateError } = await supabase
+        .from('session_summaries')
+        .update({
+          themes: themes.value.trim(),
+          strategies: strategies.value.trim(),
+          commitments: filled,
+          watch_fors: watchFors.value.trim() || null,
+          notes: notes.value.trim() || null,
         })
-        .select()
-        .single()
+        .eq('id', summaryId!)
 
-      if (cycleError) throw cycleError
-      cycleId = cycle.id
+      if (updateError) throw updateError
+    } else {
+      // Create new cycle if needed, then insert summary
+      let resolvedCycleId = cycleId
+
+      if (!resolvedCycleId) {
+        const { data: cycle, error: cycleError } = await supabase
+          .from('session_cycles')
+          .insert({
+            client_id: clientId,
+            therapist_id: (await supabase.auth.getUser()).data.user?.id,
+            session_date: new Date().toISOString().split('T')[0],
+            status: 'active',
+          })
+          .select()
+          .single()
+
+        if (cycleError) throw cycleError
+        resolvedCycleId = cycle.id
+      }
+
+      const { error: summaryError } = await supabase
+        .from('session_summaries')
+        .insert({
+          cycle_id: resolvedCycleId,
+          themes: themes.value.trim(),
+          strategies: strategies.value.trim(),
+          commitments: filled,
+          watch_fors: watchFors.value.trim() || null,
+          notes: notes.value.trim() || null,
+        })
+
+      if (summaryError) throw summaryError
     }
 
-    // 2. Save session summary
-    const { error: summaryError } = await supabase
-      .from('session_summaries')
-      .insert({
-        cycle_id: cycleId,
-        themes: themes.value.trim(),
-        strategies: strategies.value.trim(),
-        commitments: filled,
-        watch_fors: watchFors.value.trim() || null,
-        notes: notes.value.trim() || null,
-      })
-
-    if (summaryError) throw summaryError
-
-    // 3. Show success state then navigate back
     submitted.value = true
-    await new Promise(r => setTimeout(r, 1800))
+    await new Promise(r => setTimeout(r, 1500))
     router.push({ name: 'client-detail', params: { clientId } })
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
@@ -104,12 +136,14 @@ async function handleSubmit() {
         class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6 transition-colors"
       >
         <ArrowLeft class="w-4 h-4" />
-        Back to roster
+        Back
       </button>
 
       <!-- Header -->
       <div class="mb-6">
-        <h1 class="text-xl font-semibold text-gray-900">Post-Session Summary</h1>
+        <h1 class="text-xl font-semibold text-gray-900">
+          {{ isEditing ? 'Edit Post-Session Summary' : 'Post-Session Summary' }}
+        </h1>
         <p v-if="clientName" class="text-sm text-gray-500 mt-0.5">{{ clientName }}</p>
       </div>
 
@@ -219,8 +253,8 @@ async function handleSubmit() {
             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
           </svg>
           <div>
-            <p class="text-sm font-semibold text-teal-800">Summary submitted</p>
-            <p class="text-xs text-teal-600 mt-0.5">The patient can now see this in their Sessions tab. Returning to client profile…</p>
+            <p class="text-sm font-semibold text-teal-800">{{ isEditing ? 'Summary updated' : 'Summary submitted' }}</p>
+            <p class="text-xs text-teal-600 mt-0.5">Returning to client profile…</p>
           </div>
         </div>
 
@@ -232,7 +266,7 @@ async function handleSubmit() {
             class="bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors flex items-center gap-2"
           >
             <span v-if="loading" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            {{ loading ? 'Saving…' : 'Submit' }}
+            {{ loading ? 'Saving…' : isEditing ? 'Save changes' : 'Submit' }}
           </button>
         </div>
       </form>
