@@ -37,6 +37,7 @@ const presessionReflection = ref<{
   weekSummary: string | null
   progress: string | null
   agenda: string | null
+  sessionIntent: string | null
   submittedAt: string | null
 } | null>(null)
 
@@ -428,7 +429,7 @@ async function loadPresessionReflection() {
 async function fetchReflectionForCycle(cycleId: string) {
   const { data } = await supabase
     .from('presession_reflections')
-    .select('id, week_summary, progress, agenda, submitted_at')
+    .select('id, week_summary, progress, agenda, session_intent, submitted_at')
     .eq('cycle_id', cycleId)
     .maybeSingle()
   presessionReflection.value = data ? {
@@ -436,6 +437,7 @@ async function fetchReflectionForCycle(cycleId: string) {
     weekSummary: data.week_summary,
     progress: data.progress,
     agenda: data.agenda,
+    sessionIntent: data.session_intent ?? null,
     submittedAt: data.submitted_at,
   } : null
 }
@@ -450,7 +452,8 @@ async function generateBrief(cycleId: string) {
     if (error) throw error
     briefData.value = data.brief
     drawerOpen.value = true
-  } catch {
+  } catch (err) {
+    console.error('Brief generation error:', err)
     briefError.value = 'Failed to generate brief. Please try again.'
   } finally {
     generatingBrief.value = false
@@ -697,6 +700,10 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
             <div v-if="presessionReflection.agenda">
               <p class="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">What they want to focus on</p>
               <p class="text-sm text-gray-800">{{ presessionReflection.agenda }}</p>
+            </div>
+            <div v-if="presessionReflection.sessionIntent">
+              <p class="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">Support they're looking for</p>
+              <p class="text-sm text-gray-800">{{ presessionReflection.sessionIntent }}</p>
             </div>
           </div>
         </div>
