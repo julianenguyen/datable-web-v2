@@ -338,9 +338,8 @@ onMounted(async () => {
 
   await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory(), loadPresessionReflection(), loadSessions()])
 
-  // Initialize brief from active cycle if one already exists
-  const existingBriefs = activeCycle.value?.presession_briefs as Array<{ id: string; content: Record<string, unknown>; generated_at: string }> | undefined
-  if (existingBriefs?.[0]) briefData.value = existingBriefs[0]
+  // Load brief directly from presession_briefs for the active cycle
+  await loadBrief()
 
   // Real-time: reload on logs or commitment progress changes
   realtimeChannel = supabase
@@ -440,6 +439,17 @@ async function fetchReflectionForCycle(cycleId: string) {
     sessionIntent: data.session_intent ?? null,
     submittedAt: data.submitted_at,
   } : null
+}
+
+async function loadBrief() {
+  const cycleId = activeCycle.value?.id as string | undefined
+  if (!cycleId) return
+  const { data } = await supabase
+    .from('presession_briefs')
+    .select('id, content, generated_at')
+    .eq('cycle_id', cycleId)
+    .maybeSingle()
+  if (data) briefData.value = data as { id: string; content: Record<string, unknown>; generated_at: string }
 }
 
 async function generateBrief(cycleId: string) {
