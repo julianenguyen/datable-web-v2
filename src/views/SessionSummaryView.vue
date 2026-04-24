@@ -22,6 +22,7 @@ const notes = ref('')
 const loading = ref(false)
 const submitted = ref(false)
 const error = ref('')
+const showConfirm = ref(false)
 
 onMounted(async () => {
   const { data } = await supabase
@@ -57,14 +58,19 @@ function removeCommitment(index: number) {
   }
 }
 
-async function handleSubmit() {
+function handleSubmit() {
   const filled = commitments.value.filter(c => c.trim())
   if (!themes.value.trim() || !strategies.value.trim() || filled.length === 0) {
     error.value = 'Please fill in all required fields and at least one commitment.'
     return
   }
-
   error.value = ''
+  showConfirm.value = true
+}
+
+async function confirmSave() {
+  const filled = commitments.value.filter(c => c.trim())
+  showConfirm.value = false
   loading.value = true
 
   try {
@@ -271,5 +277,35 @@ async function handleSubmit() {
         </div>
       </form>
     </div>
+
+    <!-- Confirmation modal -->
+    <Teleport to="body">
+      <div v-if="showConfirm" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+          <h2 class="text-base font-semibold text-gray-900 mb-1">
+            {{ isEditing ? 'Save changes?' : 'Submit this summary?' }}
+          </h2>
+          <p class="text-sm text-gray-500 mb-5">
+            {{ isEditing
+              ? 'Your edits will update what the client sees in their app.'
+              : 'This will be visible to the client in their Sessions tab. Make sure everything looks right before sending.' }}
+          </p>
+          <div class="flex gap-3 justify-end">
+            <button
+              @click="showConfirm = false"
+              class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
+            >
+              Go back
+            </button>
+            <button
+              @click="confirmSave"
+              class="px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
+            >
+              {{ isEditing ? 'Yes, save changes' : 'Yes, submit' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </AppLayout>
 </template>
