@@ -241,6 +241,12 @@ async function createCycle() {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Not authenticated')
+
+    // Close any existing active cycle before opening a new one
+    if (activeCycle.value?.id) {
+      await supabase.from('session_cycles').update({ status: 'closed' }).eq('id', activeCycle.value.id as string)
+    }
+
     const { error } = await supabase.from('session_cycles').insert({
       client_id: clientId,
       therapist_id: user.id,
@@ -403,7 +409,8 @@ async function loadSessionHistory() {
       id, session_date, next_session_date, status,
       checkin_lists (id, status, sent_at),
       presession_briefs (id, content, generated_at),
-      session_summaries (id, themes, strategies, commitments, watch_fors, submitted_at, commitment_progress (commitment_index, status, updated_at))
+      session_summaries (id, themes, strategies, commitments, watch_fors, submitted_at, commitment_progress (commitment_index, status, updated_at)),
+      presession_reflections (id, week_summary, progress, agenda, session_intent, submitted_at)
     `)
     .eq('client_id', clientId)
     .order('session_date', { ascending: false })
@@ -1197,6 +1204,25 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                     </ul>
                   </div>
                   <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors"><p class="text-xs text-gray-400 mb-1">Watch-fors</p><p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p></div>
+
+                  <!-- Pre-session reflection from this cycle -->
+                  <template v-if="(cycle.presession_reflections as unknown[])?.length > 0">
+                    <div class="border-t border-gray-100 pt-4">
+                      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Client's Pre-Session Reflection</p>
+                      <div class="space-y-2">
+                        <div v-for="item in [
+                          { label: 'How was your week?', value: ((cycle.presession_reflections as Record<string, unknown>[])[0]).week_summary },
+                          { label: 'What progress did you make?', value: ((cycle.presession_reflections as Record<string, unknown>[])[0]).progress },
+                          { label: 'What did you want to focus on?', value: ((cycle.presession_reflections as Record<string, unknown>[])[0]).agenda },
+                          { label: 'Support they were looking for', value: ((cycle.presession_reflections as Record<string, unknown>[])[0]).session_intent },
+                        ].filter(i => i.value)" :key="item.label">
+                          <p class="text-xs text-gray-400 mb-0.5">{{ item.label }}</p>
+                          <p class="text-sm text-gray-800 pl-3 border-l-2 border-gray-200 leading-relaxed">"{{ item.value }}"</p>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
                   <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
                     <button
                       @click="router.push({ name: 'session-summary', params: { clientId }, query: { cycleId: cycle.id as string, summaryId: ((cycle.session_summaries as Record<string, unknown>[])[0]).id as string } })"
