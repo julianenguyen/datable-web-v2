@@ -876,7 +876,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
             </div>
             <div class="flex items-center gap-2 shrink-0">
               <button
-                v-if="briefData && !generatingBrief"
+                v-if="briefData"
                 @click="drawerOpen = true"
                 class="text-sm font-medium text-teal-600 hover:text-teal-700 px-3 py-2 rounded-lg hover:bg-teal-50 transition-colors"
               >
