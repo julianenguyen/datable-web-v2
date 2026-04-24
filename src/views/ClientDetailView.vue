@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { logPhiAccess } from '@/lib/audit'
 import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles, Trash2, Plus, Pencil, X, Check, RotateCcw } from 'lucide-vue-next'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
+import PresessionBriefDrawer from '@/components/PresessionBriefDrawer.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -41,6 +42,9 @@ const presessionReflection = ref<{
 
 // Brief generation
 const generatingBrief = ref(false)
+const briefData = ref<{ id: string; content: Record<string, unknown>; generated_at: string } | null>(null)
+const briefError = ref<string | null>(null)
+const drawerOpen = ref(false)
 
 // Archive / unarchive
 const clientStatus = ref<string>('active') // 'active' | 'pending' | 'archived'
@@ -333,6 +337,10 @@ onMounted(async () => {
 
   await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory(), loadPresessionReflection(), loadSessions()])
 
+  // Initialize brief from active cycle if one already exists
+  const existingBriefs = activeCycle.value?.presession_briefs as Array<{ id: string; content: Record<string, unknown>; generated_at: string }> | undefined
+  if (existingBriefs?.[0]) briefData.value = existingBriefs[0]
+
   // Real-time: reload on logs or commitment progress changes
   realtimeChannel = supabase
     .channel(`client-detail:${clientId}`)
@@ -434,17 +442,16 @@ async function fetchReflectionForCycle(cycleId: string) {
 
 async function generateBrief(cycleId: string) {
   generatingBrief.value = true
+  briefError.value = null
   try {
-    const { data } = await supabase.functions.invoke('generate-presession-brief', {
+    const { data, error } = await supabase.functions.invoke('generate-presession-brief', {
       body: { clientId, cycleId },
     })
-    router.push({
-      name: 'presession-brief',
-      params: { clientId },
-      query: { briefId: data.briefId },
-    })
+    if (error) throw error
+    briefData.value = data.brief
+    drawerOpen.value = true
   } catch {
-    // handle error
+    briefError.value = 'Failed to generate brief. Please try again.'
   } finally {
     generatingBrief.value = false
   }
@@ -846,21 +853,32 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
 
         <!-- Generate brief -->
         <div class="bg-white border border-gray-200 rounded-xl p-5">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-4">
             <div>
               <h2 class="text-sm font-semibold text-gray-900">Pre-Session Brief</h2>
               <p class="text-xs text-gray-500 mt-0.5">AI-generated summary to prepare for your next session</p>
             </div>
-            <button
-              @click="activeCycle && generateBrief(activeCycle.id as string)"
-              :disabled="generatingBrief || !activeCycle"
-              class="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
-              <span v-if="generatingBrief" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              <Sparkles v-else class="w-4 h-4" />
-              {{ generatingBrief ? 'Generating…' : 'Generate Pre-Session Brief' }}
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                v-if="briefData && !generatingBrief"
+                @click="drawerOpen = true"
+                class="text-sm font-medium text-teal-600 hover:text-teal-700 px-3 py-2 rounded-lg hover:bg-teal-50 transition-colors"
+              >
+                View Brief
+              </button>
+              <button
+                @click="activeCycle && generateBrief(activeCycle.id as string)"
+                :disabled="generatingBrief || !activeCycle"
+                class="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                <span v-if="generatingBrief" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <RotateCcw v-else-if="briefData" class="w-4 h-4" />
+                <Sparkles v-else class="w-4 h-4" />
+                {{ generatingBrief ? 'Generating…' : briefData ? 'Regenerate Brief' : 'Generate Pre-Session Brief' }}
+              </button>
+            </div>
           </div>
+          <p v-if="briefError" class="text-xs text-red-500 mt-2">{{ briefError }}</p>
         </div>
 
         <!-- ── ARCHIVE / RESTORE ZONE ── -->
@@ -1240,4 +1258,11 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
       </Teleport>
     </div>
   </AppLayout>
+
+  <PresessionBriefDrawer
+    :open="drawerOpen"
+    :brief="briefData as any"
+    :client-name="clientName"
+    @close="drawerOpen = false"
+  />
 </template>
