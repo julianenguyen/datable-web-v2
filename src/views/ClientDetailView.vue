@@ -406,7 +406,7 @@ async function loadSessionHistory() {
   const { data } = await supabase
     .from('session_cycles')
     .select(`
-      id, session_date, next_session_date, status,
+      id, session_date, next_session_date, status, created_at,
       checkin_lists (id, status, sent_at),
       presession_briefs (id, content, generated_at),
       session_summaries (id, themes, strategies, commitments, watch_fors, notes, submitted_at, commitment_progress (commitment_index, status, updated_at)),
@@ -524,23 +524,24 @@ const activeCycle = computed(() =>
   sessionHistory.value.find((c: Record<string, unknown>) => c.status === 'active') as Record<string, unknown> | undefined
 )
 
-// ── Wheel of Life frequency ──
+// ── Wheel of Life frequency — scoped to active cycle ──
 const wheelFrequency = computed(() => {
+  const cycleStart = activeCycle.value
+    ? ((activeCycle.value.session_date ?? (activeCycle.value.created_at as string)?.split('T')[0]) as string | undefined)
+    : undefined
   const counts: Record<string, number> = {}
   for (const log of logs.value) {
+    if (cycleStart && (log.log_date as string) < cycleStart) continue
     const entries = log.wheel_of_life_entries as Array<{ category: string }> | null
     if (!entries) continue
     for (const entry of entries) {
       if (entry.category) counts[entry.category] = (counts[entry.category] ?? 0) + 1
     }
   }
-  console.log('[WheelFreq] counts:', counts)
-  const result = Object.entries(WHEEL_OF_LIFE)
+  return Object.entries(WHEEL_OF_LIFE)
     .map(([key, val]) => ({ key, label: val.label, count: counts[key] ?? 0 }))
     .filter(c => c.count > 0)
     .sort((a, b) => b.count - a.count)
-  console.log('[WheelFreq] result:', result)
-  return result
 })
 const wheelMax = computed(() => Math.max(...wheelFrequency.value.map(c => c.count), 1))
 
