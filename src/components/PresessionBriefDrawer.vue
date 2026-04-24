@@ -1,6 +1,21 @@
 <script setup lang="ts">
 import { X } from 'lucide-vue-next'
 
+const CATEGORY_LABELS: Record<string, string> = {
+  career_business: 'Career & Business',
+  love_relationships: 'Love & Relationships',
+  friends_social: 'Friends & Social',
+  family_home: 'Family & Home',
+  health_fitness: 'Health & Fitness',
+  finance: 'Finance',
+  personal_growth: 'Personal Growth',
+  fun_recreation: 'Fun & Recreation',
+}
+
+function formatCategory(raw: string): string {
+  return CATEGORY_LABELS[raw] ?? raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 interface WheelEntry {
   category: string
   entry_count: number
@@ -120,7 +135,7 @@ function moodDotClass(score: number | null) {
                 class="border border-gray-100 rounded-lg p-3"
               >
                 <div class="flex items-center gap-2 mb-1">
-                  <span class="text-sm font-medium text-gray-900">{{ entry.category }}</span>
+                  <span class="text-sm font-medium text-gray-900">{{ formatCategory(entry.category) }}</span>
                   <span class="text-xs px-1.5 py-0.5 bg-teal-50 text-teal-600 rounded-full">{{ entry.entry_count }} {{ entry.entry_count === 1 ? 'entry' : 'entries' }}</span>
                 </div>
                 <p class="text-sm text-gray-600 leading-relaxed">{{ entry.themes }}</p>
