@@ -409,7 +409,7 @@ async function loadSessionHistory() {
       id, session_date, next_session_date, status,
       checkin_lists (id, status, sent_at),
       presession_briefs (id, content, generated_at),
-      session_summaries (id, themes, strategies, commitments, watch_fors, submitted_at, commitment_progress (commitment_index, status, updated_at)),
+      session_summaries (id, themes, strategies, commitments, watch_fors, notes, submitted_at, commitment_progress (commitment_index, status, updated_at)),
       presession_reflections (id, week_summary, progress, agenda, session_intent, submitted_at)
     `)
     .eq('client_id', clientId)
@@ -1204,6 +1204,10 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                     </ul>
                   </div>
                   <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors"><p class="text-xs text-gray-400 mb-1">Watch-fors</p><p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p></div>
+                  <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).notes" class="bg-amber-50 border border-amber-100 rounded-lg px-3 py-3">
+                    <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-1">🔒 Private note</p>
+                    <p class="text-sm text-amber-900 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).notes }}</p>
+                  </div>
 
                   <!-- Pre-session reflection from this cycle -->
                   <template v-if="(cycle.presession_reflections as unknown[])?.length > 0">
