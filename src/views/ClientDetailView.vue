@@ -7,13 +7,16 @@ import { logPhiAccess } from '@/lib/audit'
 import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles, Trash2, Plus, Pencil, X, Check, RotateCcw } from 'lucide-vue-next'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
 import PresessionBriefDrawer from '@/components/PresessionBriefDrawer.vue'
+import AwardMilestoneDrawer from '@/components/AwardMilestoneDrawer.vue'
+import ClientMilestonesTab from '@/components/ClientMilestonesTab.vue'
 
 const router = useRouter()
 const route = useRoute()
 const clientId = route.params.clientId as string
 const clientName = ref<string>('Client')
 
-const activeTab = ref<'overview' | 'logs' | 'history'>('overview')
+const activeTab = ref<'overview' | 'logs' | 'history' | 'milestones'>('overview')
+const isAwardDrawerOpen = ref(false)
 
 // Daily logs
 const logs = ref<Record<string, unknown>[]>([])
@@ -614,6 +617,13 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         </div>
         <div class="flex items-center gap-2">
           <button
+            @click="isAwardDrawerOpen = true"
+            class="text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path stroke-linecap="round" stroke-linejoin="round" d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+            Award Milestone
+          </button>
+          <button
             @click="router.push({ name: 'session-summary', params: { clientId }, query: activeCycle ? { cycleId: activeCycle.id as string } : {} })"
             class="text-sm font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 px-4 py-2 rounded-lg transition-colors"
           >
@@ -689,9 +699,9 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
       <!-- Tabs -->
       <div class="flex gap-0 border-b border-gray-200 mb-6">
         <button
-          v-for="tab in [{ key: 'overview', label: 'Overview' }, { key: 'logs', label: 'Logged Entries' }, { key: 'history', label: 'Session History' }]"
+          v-for="tab in [{ key: 'overview', label: 'Overview' }, { key: 'logs', label: 'Logged Entries' }, { key: 'history', label: 'Session History' }, { key: 'milestones', label: 'Milestones' }]"
           :key="tab.key"
-          @click="activeTab = tab.key as 'overview' | 'logs' | 'history'"
+          @click="activeTab = tab.key as 'overview' | 'logs' | 'history' | 'milestones'"
           class="px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px"
           :class="activeTab === tab.key
             ? 'border-teal-600 text-teal-700'
@@ -1247,6 +1257,14 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
 
       </div>
 
+      <!-- ── TAB 4: MILESTONES ── -->
+      <div v-else-if="activeTab === 'milestones'">
+        <ClientMilestonesTab
+          :client-id="clientId"
+          :client-first-name="clientName.split(' ')[0]"
+        />
+      </div>
+
       <!-- ── Schedule Session Modal ── -->
       <Teleport to="body">
         <div v-if="showScheduleModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showScheduleModal = false">
@@ -1327,5 +1345,12 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
     :brief="briefData as any"
     :client-name="clientName"
     @close="drawerOpen = false"
+  />
+
+  <AwardMilestoneDrawer
+    :open="isAwardDrawerOpen"
+    :client-id="clientId"
+    :client-first-name="clientName.split(' ')[0]"
+    @close="isAwardDrawerOpen = false"
   />
 </template>
