@@ -13,6 +13,7 @@ interface ClientCard {
   lastLogDate: string | null
   daysLastLog: number | null
   logsLast7Days: number
+  loggedDays: boolean[]
   isFlagged: boolean
   flagReason?: string
   cycleId: string | null
@@ -124,6 +125,13 @@ async function loadClients() {
 
     const logsLast7Days = clientLogs.filter(l => l.log_date >= weekStart).length
 
+    const logDateSet = new Set(clientLogs.map(l => l.log_date))
+    const loggedDays = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() - (6 - i))
+      return logDateSet.has(d.toISOString().split('T')[0])
+    })
+
     return {
       id: c.id,
       name: c.name,
@@ -132,6 +140,7 @@ async function loadClients() {
       lastLogDate: lastLog?.log_date ?? null,
       daysLastLog,
       logsLast7Days,
+      loggedDays,
       isFlagged,
       flagReason,
       cycleId: cycle?.id ?? null,
@@ -286,10 +295,21 @@ function openClientDetail(clientId: string) {
                   <FileText class="w-3.5 h-3.5" />
                   <span>{{ lastLogLabel(client.daysLastLog) }}</span>
                 </div>
-                <div class="flex items-center gap-1.5">
-                  <CheckCircle2 class="w-3.5 h-3.5" />
-                  <span :class="completionColor(client.logsLast7Days)">
-                    {{ client.logsLast7Days }} of 7 days logged
+                <div
+                  class="flex items-center gap-1.5"
+                  :title="`${client.logsLast7Days} of 7 days logged (past week)`"
+                >
+                  <CheckCircle2 class="w-3.5 h-3.5 shrink-0" />
+                  <div class="flex items-center gap-0.5">
+                    <div
+                      v-for="(logged, i) in client.loggedDays"
+                      :key="i"
+                      class="w-2 h-2 rounded-full"
+                      :class="logged ? 'bg-teal-500' : 'bg-gray-200'"
+                    />
+                  </div>
+                  <span :class="completionColor(client.logsLast7Days)" class="tabular-nums">
+                    {{ client.logsLast7Days }}/7
                   </span>
                 </div>
               </div>
