@@ -171,8 +171,12 @@ function toggleMilestone(id: string) {
 }
 
 function selectMilestone(id: string) {
-  selectedMilestoneId.value = id
-  if (!expandedMilestones.value.has(id)) toggleMilestone(id)
+  if (selectedMilestoneId.value === id) {
+    selectedMilestoneId.value = null
+  } else {
+    selectedMilestoneId.value = id
+    if (!expandedMilestones.value.has(id)) toggleMilestone(id)
+  }
 }
 
 function backToMilestones() {
