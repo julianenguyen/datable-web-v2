@@ -273,13 +273,11 @@ function close() {
                 v-for="domain in taxonomy"
                 :key="domain.domain"
                 @click="selectDomain(domain.domain)"
-                class="text-left p-4 rounded-xl border transition-all hover:bg-gray-50"
-                :style="{
-                  borderColor: selectedDomain === domain.domain ? domain.color : '#e5e7eb',
-                  backgroundColor: selectedDomain === domain.domain ? domain.color + '14' : '',
-                  borderLeftWidth: '4px',
-                  borderLeftColor: domain.color,
-                }"
+                class="text-left p-4 rounded-xl border transition-all hover:bg-teal-50"
+                :class="selectedDomain === domain.domain
+                  ? 'border-teal-600 bg-teal-50'
+                  : 'border-gray-200'"
+                :style="{ borderLeftWidth: '4px', borderLeftColor: domain.color }"
               >
                 <p class="text-sm font-medium text-gray-900 leading-snug">{{ domain.domain_label }}</p>
                 <p class="text-xs text-gray-400 mt-0.5">{{ domain.milestones.length }} milestones</p>
@@ -303,19 +301,17 @@ function close() {
                 v-for="m in selectedDomainGroup.milestones"
                 :key="m.id"
                 class="border rounded-xl overflow-hidden transition-all cursor-pointer"
-                :style="{
-                  borderColor: selectedMilestoneId === m.id ? selectedDomainGroup.color : '#e5e7eb',
-                  backgroundColor: selectedMilestoneId === m.id ? selectedDomainGroup.color + '14' : 'white',
-                }"
+                :class="selectedMilestoneId === m.id
+                  ? 'border-teal-600 bg-teal-50'
+                  : 'border-gray-200 bg-white hover:border-gray-300'"
                 @click="selectMilestone(m.id)"
               >
                 <div class="flex items-start gap-3 px-4 py-3">
                   <!-- Radio -->
                   <div class="mt-0.5 shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors"
-                    :style="{
-                      borderColor: selectedMilestoneId === m.id ? selectedDomainGroup.color : '#d1d5db',
-                      backgroundColor: selectedMilestoneId === m.id ? selectedDomainGroup.color : 'transparent',
-                    }">
+                    :class="selectedMilestoneId === m.id
+                      ? 'border-teal-600 bg-teal-600'
+                      : 'border-gray-300 bg-transparent'">
                     <div v-if="selectedMilestoneId === m.id" class="w-1.5 h-1.5 rounded-full bg-white" />
                   </div>
                   <div class="flex-1 min-w-0">
@@ -348,9 +344,9 @@ function close() {
             </button>
 
             <!-- Selected milestone summary -->
-            <div class="border rounded-xl p-4 mb-5" :style="{ borderColor: selectedDomainGroup.color + '40', backgroundColor: selectedDomainGroup.color + '0a' }">
-              <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full mb-2"
-                :style="{ backgroundColor: selectedDomainGroup.color, color: 'white' }">
+            <div class="border border-teal-200 bg-teal-50 rounded-xl p-4 mb-5">
+              <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full mb-2 text-white"
+                :style="{ backgroundColor: selectedDomainGroup.color }">
                 {{ selectedDomainGroup.domain_label }}
               </span>
               <p class="text-sm font-semibold text-gray-900">{{ selectedMilestone.milestone_name }}</p>

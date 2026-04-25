@@ -91,16 +91,21 @@ onMounted(loadMilestones)
       <div
         v-for="m in milestones"
         :key="m.id"
-        class="border border-gray-200 rounded-xl overflow-hidden cursor-pointer hover:border-gray-300 transition-colors"
+        class="border border-gray-200 rounded-xl overflow-hidden cursor-pointer hover:border-teal-300 transition-colors flex"
         @click="toggleExpand(m.id)"
       >
+        <!-- Domain color left bar -->
+        <div class="w-1 shrink-0 rounded-l-xl" :style="{ backgroundColor: m.domain_color }" />
+
+        <!-- Content -->
+        <div class="flex-1 min-w-0">
         <!-- Collapsed row -->
         <div class="px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <span
                 class="inline-block text-xs font-medium px-2 py-0.5 rounded-full mb-1.5"
-                :style="{ backgroundColor: m.domain_color, color: 'white' }"
+                :style="{ backgroundColor: m.domain_color + '20', color: m.domain_color }"
               >
                 {{ m.domain_label }}
               </span>
@@ -139,6 +144,7 @@ onMounted(loadMilestones)
             <p class="text-xs text-gray-400">Cycle: {{ m.cycle_label }}</p>
           </div>
         </div>
+        </div><!-- end flex-1 content wrapper -->
       </div>
     </div>
   </div>
