@@ -32,6 +32,7 @@ interface PresessionReflection {
   week_summary: string | null
   progress: string | null
   agenda: string | null
+  session_intent: string | null
   note?: string
 }
 
@@ -184,7 +185,12 @@ function moodDotClass(score: number | null) {
           <!-- Pre-Session Reflection -->
           <section>
             <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Client's Pre-Session Reflection</h3>
-            <div v-if="brief.content.presession_reflection?.week_summary || brief.content.presession_reflection?.progress || brief.content.presession_reflection?.agenda" class="space-y-3">
+            <div v-if="brief.content.presession_reflection?.week_summary || brief.content.presession_reflection?.progress || brief.content.presession_reflection?.agenda || brief.content.presession_reflection?.session_intent" class="space-y-3">
+              <!-- Support they're looking for — shown prominently at top -->
+              <div v-if="brief.content.presession_reflection.session_intent" class="bg-teal-50 border-l-2 border-teal-500 rounded-r-lg px-3 py-2.5">
+                <p class="text-xs font-semibold text-teal-600 uppercase tracking-wide mb-1">Support they're looking for</p>
+                <p class="text-sm text-teal-900 font-medium">{{ brief.content.presession_reflection.session_intent }}</p>
+              </div>
               <div v-if="brief.content.presession_reflection.week_summary">
                 <p class="text-xs font-medium text-gray-500 mb-1">How was your week?</p>
                 <p class="text-sm text-gray-800 pl-3 border-l-2 border-gray-200 leading-relaxed">"{{ brief.content.presession_reflection.week_summary }}"</p>
