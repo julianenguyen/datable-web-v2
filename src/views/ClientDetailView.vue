@@ -438,7 +438,7 @@ async function loadSessionHistory() {
       id, session_date, next_session_date, status, created_at,
       checkin_lists (id, status, sent_at),
       presession_briefs (id, content, generated_at),
-      session_summaries (id, themes, strategies, commitments, watch_fors, notes, submitted_at, commitment_progress (commitment_index, status, updated_at)),
+      session_summaries (id, themes, strategies, commitments, watch_fors, notes, submitted_at, commitment_progress (commitment_index, status, helpfulness_rating, updated_at)),
       presession_reflections (id, week_summary, progress, agenda, session_intent, submitted_at)
     `)
     .eq('client_id', clientId)
@@ -1234,7 +1234,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                             'bg-amber-50 text-amber-700': (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'in_progress',
                             'bg-gray-100 text-gray-500': !(((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i),
                           }">
-                          {{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'completed' ? '✓ Done' : (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'in_progress' ? '⏳ In progress' : '— Not started' }}
+                          {{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'completed' ? '✓ Done' : (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.status === 'in_progress' ? '⏳ In progress' : '— Not started' }}{{ (() => { const r = (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.find((p: Record<string, unknown>) => p.commitment_index === i)?.helpfulness_rating; return r === 3 ? ' 👍' : r === 2 ? ' 😐' : r === 1 ? ' 👎' : '' })() }}
                         </span>
                         <span class="text-sm text-gray-800 leading-relaxed">{{ c }}</span>
                       </li>
