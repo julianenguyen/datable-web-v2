@@ -792,9 +792,12 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
 
         <!-- Mood & Energy Trends -->
         <div class="bg-white border border-gray-200 rounded-xl p-5">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-sm font-semibold text-gray-900">Mood & Energy Trends</h2>
-            <div class="flex items-center gap-4 text-xs text-gray-500">
+          <div class="flex items-start justify-between mb-1">
+            <div>
+              <h2 class="text-sm font-semibold text-gray-900">Mood & Energy Trends</h2>
+              <p class="text-xs text-gray-400 mt-0.5">Scale 1–10 · higher is better · self-reported by patient</p>
+            </div>
+            <div class="flex items-center gap-4 text-xs text-gray-500 mt-0.5">
               <span class="flex items-center gap-1.5">
                 <span class="inline-block w-3 h-0.5 rounded" style="background:#16796F" />
                 Mood
@@ -804,6 +807,10 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                 Energy
               </span>
             </div>
+          </div>
+          <div class="flex gap-6 text-xs text-gray-400 mb-4">
+            <span><span class="text-gray-500 font-medium">Mood:</span> how the patient genuinely feels</span>
+            <span><span class="text-gray-500 font-medium">Energy:</span> physical &amp; mental energy level</span>
           </div>
           <div v-if="logsLoading" class="text-xs text-gray-400 py-4 text-center">Loading…</div>
           <div v-else-if="logs.length === 0" class="text-xs text-gray-400">No log entries yet.</div>
