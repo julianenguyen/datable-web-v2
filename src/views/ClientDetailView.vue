@@ -9,13 +9,19 @@ import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
 import PresessionBriefDrawer from '@/components/PresessionBriefDrawer.vue'
 import AwardMilestoneDrawer from '@/components/AwardMilestoneDrawer.vue'
 import ClientMilestonesTab from '@/components/ClientMilestonesTab.vue'
+import BillingTab from '@/components/BillingTab.vue'
 
 const router = useRouter()
 const route = useRoute()
 const clientId = route.params.clientId as string
 const clientName = ref<string>('Client')
 
-const activeTab = ref<'overview' | 'logs' | 'history' | 'milestones'>('overview')
+const activeTab = ref<'overview' | 'logs' | 'history' | 'milestones' | 'billing'>('overview')
+
+// Insurance / billing
+const insuranceStatus = ref<'insurance' | 'self_pay' | 'sliding_scale' | 'unknown'>('unknown')
+const insuranceProvider = ref<string>('')
+const savingInsurance = ref(false)
 const isAwardDrawerOpen = ref(false)
 
 // Daily logs
@@ -195,11 +201,12 @@ async function saveSchedule() {
       if (error) throw error
     }
 
+    const scheduledDate = scheduleForm.value.date
     scheduleForm.value = { date: '', time: '', recurrence: 'none', endDate: '' }
     showScheduleModal.value = false
     await loadSessions()
     // navigate calendar to the scheduled month
-    const d = new Date(scheduleForm.value.date || sessions.value[0]?.session_date)
+    const d = new Date(scheduledDate || sessions.value[0]?.session_date)
     if (!isNaN(d.getTime())) {
       calendarYear.value = d.getFullYear()
       calendarMonth.value = d.getMonth()
@@ -334,15 +341,34 @@ async function confirmUnarchive() {
   }
 }
 
+async function saveInsurance() {
+  savingInsurance.value = true
+  try {
+    await supabase
+      .from('clients')
+      .update({
+        insurance_status: insuranceStatus.value,
+        insurance_provider: insuranceStatus.value === 'insurance' ? insuranceProvider.value.trim() || null : null,
+      })
+      .eq('id', clientId)
+  } catch (e) {
+    console.error('[ClientDetail] insurance save error:', e)
+  } finally {
+    savingInsurance.value = false
+  }
+}
+
 onMounted(async () => {
   const { data: clientRow } = await supabase
     .from('clients')
-    .select('name, status')
+    .select('name, status, insurance_status, insurance_provider')
     .eq('id', clientId)
     .single()
   if (clientRow) {
     clientName.value = clientRow.name
     clientStatus.value = clientRow.status ?? 'active'
+    insuranceStatus.value = (clientRow.insurance_status as typeof insuranceStatus.value) ?? 'unknown'
+    insuranceProvider.value = clientRow.insurance_provider ?? ''
   }
 
   await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory(), loadPresessionReflection(), loadSessions()])
@@ -699,9 +725,9 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
       <!-- Tabs -->
       <div class="flex gap-0 border-b border-gray-200 mb-6">
         <button
-          v-for="tab in [{ key: 'overview', label: 'Overview' }, { key: 'logs', label: 'Logged Entries' }, { key: 'history', label: 'Session History' }, { key: 'milestones', label: 'Milestones' }]"
+          v-for="tab in [{ key: 'overview', label: 'Overview' }, { key: 'logs', label: 'Logged Entries' }, { key: 'history', label: 'Session History' }, { key: 'milestones', label: 'Milestones' }, { key: 'billing', label: 'Billing' }]"
           :key="tab.key"
-          @click="activeTab = tab.key as 'overview' | 'logs' | 'history' | 'milestones'"
+          @click="activeTab = tab.key as 'overview' | 'logs' | 'history' | 'milestones' | 'billing'"
           class="px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px"
           :class="activeTab === tab.key
             ? 'border-teal-600 text-teal-700'
@@ -1262,6 +1288,51 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         <ClientMilestonesTab
           :client-id="clientId"
           :client-first-name="clientName.split(' ')[0]"
+        />
+      </div>
+
+      <!-- ── TAB 5: BILLING ── -->
+      <div v-else-if="activeTab === 'billing'" class="space-y-6">
+
+        <!-- Insurance settings card -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <h3 class="text-sm font-semibold text-gray-900 mb-3">Billing Settings</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Billing Type</label>
+              <select
+                v-model="insuranceStatus"
+                @change="saveInsurance"
+                class="w-56 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+              >
+                <option value="unknown">Unknown</option>
+                <option value="insurance">Insurance</option>
+                <option value="self_pay">Self-Pay</option>
+                <option value="sliding_scale">Sliding Scale</option>
+              </select>
+            </div>
+            <div v-if="insuranceStatus === 'insurance'">
+              <label class="block text-xs font-medium text-gray-600 mb-1">Insurance Provider</label>
+              <div class="flex gap-2 items-center">
+                <input
+                  v-model="insuranceProvider"
+                  type="text"
+                  maxlength="100"
+                  placeholder="e.g., BCBS, Aetna, United, Cigna"
+                  class="w-72 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  @blur="saveInsurance"
+                />
+                <span v-if="savingInsurance" class="text-xs text-gray-400">Saving…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Report list -->
+        <BillingTab
+          :client-id="clientId"
+          :client-name="clientName"
+          :insurance-status="insuranceStatus"
         />
       </div>
 
