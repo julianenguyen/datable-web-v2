@@ -1215,6 +1215,20 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                         ✓ {{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[])?.filter((p: Record<string, unknown>) => p.status === 'completed').length ?? 0 }}/{{ (((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[]).length }} done
                       </span>
                     </template>
+                    <template v-if="(() => { const progress = (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[]); return progress?.some((p: Record<string, unknown>) => p.helpfulness_rating != null) })()">
+                      <span class="shrink-0 inline-flex items-center gap-1.5 text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded-full border border-gray-200">
+                        <span class="text-xs text-gray-400">Helpfulness</span>
+                        <span
+                          v-for="(dot, di) in (() => {
+                            const progress = (((cycle.session_summaries as Record<string, unknown>[])[0]).commitment_progress as Record<string, unknown>[]) ?? []
+                            return progress.filter((p: Record<string, unknown>) => p.helpfulness_rating != null).map((p: Record<string, unknown>) => p.helpfulness_rating)
+                          })()"
+                          :key="di"
+                          class="w-2 h-2 rounded-full inline-block"
+                          :class="dot === 3 ? 'bg-green-500' : dot === 1 ? 'bg-red-400' : 'bg-gray-300'"
+                        />
+                      </span>
+                    </template>
                     <span v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors" class="shrink-0 inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">👁 Watch-fors</span>
                   </div>
                   <ChevronDown v-if="!expandedCycles.has(cycle.id as string)" class="w-4 h-4 text-gray-400 shrink-0" />
