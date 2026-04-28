@@ -345,7 +345,7 @@ async function downloadFile(type: 'pdf' | 'excel') {
 // Load when drawer opens
 watch(() => props.isOpen, (open) => {
   if (open) loadReport()
-})
+}, { immediate: true })
 </script>
 
 <template>
