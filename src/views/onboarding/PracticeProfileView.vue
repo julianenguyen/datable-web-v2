@@ -85,12 +85,21 @@ const isValid = computed(() => {
 })
 
 async function handleContinue() {
-  if (!isValid.value || !auth.user) return
+  if (!isValid.value) return
   error.value = ''
   loading.value = true
   try {
+    // Verify a real session exists (server-side check — auth.user in the store
+    // can be set without a JWT if email confirmation hasn't happened yet)
+    const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser()
+    if (userError || !verifiedUser) {
+      error.value = 'Your session has expired. Please sign in again.'
+      router.push('/auth')
+      return
+    }
+
     const insertData: Record<string, unknown> = {
-      owner_id: auth.user.id,
+      owner_id: verifiedUser.id,
       name: practiceName.value.trim(),
       practice_type: practiceType.value,
       address_street: addressStreet.value.trim(),
