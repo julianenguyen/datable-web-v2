@@ -38,6 +38,7 @@ const healthSummary = ref<{
 
 // Session history
 const sessionHistory = ref<Record<string, unknown>[]>([])
+const sessionHistoryError = ref<string | null>(null)
 const expandedCycles = ref<Set<string>>(new Set())
 
 // Pre-session reflection from patient
@@ -434,7 +435,7 @@ async function loadHealthSummary() {
 }
 
 async function loadSessionHistory() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('session_cycles')
     .select(`
       id, session_date, next_session_date, status, created_at,
@@ -445,6 +446,13 @@ async function loadSessionHistory() {
     `)
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('[loadSessionHistory] error:', error)
+    sessionHistoryError.value = `Query error: ${error.message}`
+    return
+  }
+  sessionHistoryError.value = null
 
   // Sort each cycle's summaries newest-first so [0] is always the latest
   sessionHistory.value = (data ?? []).map((cycle: Record<string, unknown>) => ({
@@ -1201,15 +1209,17 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         <!-- ── Post-session summaries ── -->
         <div>
           <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Session Notes</h3>
-          <div v-if="sessionHistory.length === 0" class="text-sm text-gray-400 py-4 text-center">
+          <div v-if="sessionHistoryError" class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-3">
+            {{ sessionHistoryError }}
+          </div>
+          <div v-if="sessionHistory.filter((c: Record<string, unknown>) => (c.session_summaries as unknown[])?.length > 0).length === 0" class="text-sm text-gray-400 py-4 text-center">
             No session notes yet. Submit a post-session summary after a session.
           </div>
           <div v-else class="space-y-3">
             <div
-              v-for="cycle in sessionHistory"
+              v-for="cycle in sessionHistory.filter((c: Record<string, unknown>) => (c.session_summaries as unknown[])?.length > 0)"
               :key="cycle.id as string"
-              class="bg-white border rounded-xl overflow-hidden"
-              :class="(cycle.session_summaries as unknown[])?.length > 0 ? 'border-gray-200' : 'border-gray-100'"
+              class="bg-white border border-gray-200 rounded-xl overflow-hidden"
             >
               <template v-if="(cycle.session_summaries as unknown[])?.length > 0">
                 <button
