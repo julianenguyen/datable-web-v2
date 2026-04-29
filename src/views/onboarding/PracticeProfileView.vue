@@ -117,7 +117,7 @@ async function handleContinue() {
     await onboarding.markStep('step_practice_profile', { practice_id: data.id })
     router.push('/onboarding/clinician')
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to save practice. Please try again.'
+    error.value = (e as { message?: string })?.message ?? 'Failed to save practice. Please try again.'
   } finally {
     loading.value = false
   }
