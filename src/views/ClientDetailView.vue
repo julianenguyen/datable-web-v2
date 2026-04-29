@@ -435,30 +435,53 @@ async function loadHealthSummary() {
 }
 
 async function loadSessionHistory() {
-  const { data, error } = await supabase
+  // Fetch cycles
+  const { data: cycles, error: cyclesError } = await supabase
     .from('session_cycles')
-    .select(`
-      id, session_date, next_session_date, status, created_at,
-      checkin_lists (id, status, sent_at),
-      presession_briefs (id, content, generated_at),
-      session_summaries (id, title, themes, strategies, commitments, watch_fors, wins, public_notes, notes, submitted_at, commitment_progress (commitment_index, status, helpfulness_rating, updated_at)),
-      presession_reflections (id, week_summary, progress, agenda, session_intent, submitted_at)
-    `)
+    .select('id, session_date, next_session_date, status, created_at, checkin_lists (id, status, sent_at), presession_briefs (id, content, generated_at), presession_reflections (id, week_summary, progress, agenda, session_intent, submitted_at)')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
 
-  if (error) {
-    console.error('[loadSessionHistory] error:', error)
-    sessionHistoryError.value = `Query error: ${error.message}`
+  if (cyclesError) {
+    console.error('[loadSessionHistory] cycles error:', cyclesError)
+    sessionHistoryError.value = `Failed to load session history: ${cyclesError.message}`
     return
   }
+
+  if (!cycles || cycles.length === 0) {
+    sessionHistory.value = []
+    sessionHistoryError.value = null
+    return
+  }
+
+  const cycleIds = cycles.map(c => c.id)
+
+  // Fetch summaries separately — avoids nested select join issues
+  const { data: summaries, error: summariesError } = await supabase
+    .from('session_summaries')
+    .select('id, cycle_id, title, themes, strategies, commitments, watch_fors, wins, public_notes, notes, submitted_at, commitment_progress (commitment_index, status, helpfulness_rating, updated_at)')
+    .in('cycle_id', cycleIds)
+    .order('submitted_at', { ascending: false })
+
+  if (summariesError) {
+    console.error('[loadSessionHistory] summaries error:', summariesError)
+    sessionHistoryError.value = `Failed to load summaries: ${summariesError.message}`
+    return
+  }
+
   sessionHistoryError.value = null
 
-  // Sort each cycle's summaries newest-first so [0] is always the latest
-  sessionHistory.value = (data ?? []).map((cycle: Record<string, unknown>) => ({
-    ...cycle,
-    session_summaries: ((cycle.session_summaries as Record<string, unknown>[]) ?? [])
-      .sort((a, b) => new Date(b.submitted_at as string).getTime() - new Date(a.submitted_at as string).getTime()),
+  // Group summaries by cycle_id (newest first due to ordering above)
+  const summariesByCycle: Record<string, Record<string, unknown>[]> = {}
+  for (const s of (summaries ?? [])) {
+    const cid = s.cycle_id as string
+    if (!summariesByCycle[cid]) summariesByCycle[cid] = []
+    summariesByCycle[cid].push(s as Record<string, unknown>)
+  }
+
+  sessionHistory.value = cycles.map(c => ({
+    ...(c as Record<string, unknown>),
+    session_summaries: summariesByCycle[c.id] ?? [],
   }))
 }
 
