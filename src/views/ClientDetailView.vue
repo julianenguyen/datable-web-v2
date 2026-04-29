@@ -1277,6 +1277,163 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
 
         </div>
 
+        <!-- ── Session Notes ── -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Session Notes</h3>
+          </div>
+
+          <div v-if="sessionHistoryError" class="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            {{ sessionHistoryError }}
+          </div>
+          <div v-else-if="allSummaries.length === 0" class="text-sm text-gray-400 py-8 text-center">No session notes yet.</div>
+          <div v-else class="space-y-3">
+            <div
+              v-for="s in allSummaries"
+              :key="s.id as string"
+              class="bg-white border border-gray-200 rounded-xl overflow-hidden"
+            >
+              <!-- Summary header row -->
+              <div
+                class="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                @click="toggleCycle(s.id as string)"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-gray-900">{{ s.title || 'Session Summary' }}</p>
+                    <p class="text-xs text-gray-400 mt-0.5">{{ s.submitted_at ? new Date(s.submitted_at as string).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '' }}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <router-link
+                    :to="{ name: 'session-summary', params: { clientId }, query: { cycleId: s._cycleId, summaryId: s.id as string } }"
+                    @click.stop
+                    class="text-xs text-teal-600 hover:text-teal-700 font-medium px-2.5 py-1 border border-teal-200 rounded-lg transition-colors"
+                  >Edit</router-link>
+                  <svg
+                    class="w-4 h-4 text-gray-400 transition-transform"
+                    :class="expandedCycles.has(s.id as string) ? 'rotate-180' : ''"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                  ><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                </div>
+              </div>
+
+              <!-- Expanded body -->
+              <div v-if="expandedCycles.has(s.id as string)" class="px-5 pb-5 border-t border-gray-100 space-y-4 pt-4">
+
+                <!-- Themes -->
+                <div v-if="s.themes">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Session Themes</p>
+                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.themes }}</p>
+                </div>
+
+                <!-- Strategies -->
+                <div v-if="s.strategies">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Strategies & Tools</p>
+                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.strategies }}</p>
+                </div>
+
+                <!-- Action items -->
+                <div v-if="(s.commitments as string[])?.length">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Action Items</p>
+                  <ul class="space-y-2">
+                    <li
+                      v-for="(c, ci) in (s.commitments as string[])"
+                      :key="ci"
+                      class="flex items-start gap-2"
+                    >
+                      <!-- Status icon -->
+                      <span
+                        class="mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center"
+                        :class="{
+                          'bg-teal-500 border-teal-500': (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status === 'completed',
+                          'bg-yellow-400 border-yellow-400': (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status === 'in_progress',
+                          'border-gray-300': !['completed','in_progress'].includes((s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status ?? '')
+                        }"
+                      >
+                        <svg v-if="(s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'completed'" class="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span v-else-if="(s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'in_progress'" class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                      </span>
+                      <!-- Text + badges -->
+                      <div class="flex-1 min-w-0">
+                        <span class="text-sm text-gray-700">{{ c }}</span>
+                        <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                          <!-- Status badge -->
+                          <span
+                            v-if="(s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)"
+                            class="text-xs font-medium px-1.5 py-0.5 rounded"
+                            :class="{
+                              'bg-teal-50 text-teal-700': (s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'completed',
+                              'bg-yellow-50 text-yellow-700': (s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'in_progress',
+                              'bg-gray-100 text-gray-500': (s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'not_started'
+                            }"
+                          >
+                            {{
+                              { completed: 'Completed', in_progress: 'In Progress', not_started: 'Not Started' }[
+                                ((s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status ?? 'not_started') as 'completed' | 'in_progress' | 'not_started'
+                              ]
+                            }}
+                          </span>
+                          <!-- Helpfulness badge -->
+                          <span
+                            v-if="(s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.helpfulness_rating != null"
+                            class="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700"
+                          >
+                            {{ (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.helpfulness_rating }}/5 helpful
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Wins -->
+                <div v-if="s.wins">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Wins</p>
+                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.wins }}</p>
+                </div>
+
+                <!-- Watch-fors -->
+                <div v-if="s.watch_fors">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Watch-fors</p>
+                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.watch_fors }}</p>
+                </div>
+
+                <!-- Notes for client -->
+                <div v-if="s.public_notes">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes for Client</p>
+                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.public_notes }}</p>
+                </div>
+
+                <!-- Private notes -->
+                <div v-if="s.notes">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Private Notes</p>
+                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.notes }}</p>
+                </div>
+
+                <!-- Pre-session reflection -->
+                <div v-if="(s._presessionReflections as Record<string, unknown>[])?.length">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pre-Session Reflection</p>
+                  <div class="bg-gray-50 rounded-lg p-3 space-y-2">
+                    <div v-if="(s._presessionReflections as Record<string, unknown>[])[0]?.week_summary">
+                      <p class="text-xs text-gray-500 font-medium">Week summary</p>
+                      <p class="text-sm text-gray-700">{{ (s._presessionReflections as Record<string, unknown>[])[0].week_summary }}</p>
+                    </div>
+                    <div v-if="(s._presessionReflections as Record<string, unknown>[])[0]?.agenda">
+                      <p class="text-xs text-gray-500 font-medium">Agenda</p>
+                      <p class="text-sm text-gray-700">{{ (s._presessionReflections as Record<string, unknown>[])[0].agenda }}</p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- ── Past Sessions ── -->
         <div>
           <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Past Sessions</h3>
@@ -1368,128 +1525,6 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                   </div>
                 </div>
                 <div v-else class="text-sm text-gray-400">No pre-session brief was generated for this session.</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── Session Notes ── -->
-        <div>
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Session Notes</h3>
-          </div>
-
-          <div v-if="sessionHistoryError" class="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-            {{ sessionHistoryError }}
-          </div>
-          <div v-else-if="allSummaries.length === 0" class="text-sm text-gray-400 py-8 text-center">No session notes yet.</div>
-          <div v-else class="space-y-3">
-            <div
-              v-for="s in allSummaries"
-              :key="s.id as string"
-              class="bg-white border border-gray-200 rounded-xl overflow-hidden"
-            >
-              <!-- Summary header row -->
-              <div
-                class="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                @click="toggleCycle(s.id as string)"
-              >
-                <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                  </div>
-                  <div>
-                    <p class="text-sm font-medium text-gray-900">{{ s.title || 'Session Summary' }}</p>
-                    <p class="text-xs text-gray-400 mt-0.5">{{ s.submitted_at ? new Date(s.submitted_at as string).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '' }}</p>
-                  </div>
-                </div>
-                <div class="flex items-center gap-2">
-                  <router-link
-                    :to="{ name: 'session-summary', params: { clientId }, query: { cycleId: s._cycleId, summaryId: s.id as string } }"
-                    @click.stop
-                    class="text-xs text-teal-600 hover:text-teal-700 font-medium px-2.5 py-1 border border-teal-200 rounded-lg transition-colors"
-                  >Edit</router-link>
-                  <svg
-                    class="w-4 h-4 text-gray-400 transition-transform"
-                    :class="expandedCycles.has(s.id as string) ? 'rotate-180' : ''"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
-                  ><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-                </div>
-              </div>
-
-              <!-- Expanded body -->
-              <div v-if="expandedCycles.has(s.id as string)" class="px-5 pb-5 border-t border-gray-100 space-y-4 pt-4">
-
-                <!-- Themes -->
-                <div v-if="s.themes">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Session Themes</p>
-                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.themes }}</p>
-                </div>
-
-                <!-- Strategies -->
-                <div v-if="s.strategies">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Strategies & Tools</p>
-                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.strategies }}</p>
-                </div>
-
-                <!-- Action items -->
-                <div v-if="(s.commitments as string[])?.length">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Action Items</p>
-                  <ul class="space-y-1.5">
-                    <li
-                      v-for="(c, ci) in (s.commitments as string[])"
-                      :key="ci"
-                      class="flex items-start gap-2"
-                    >
-                      <span class="mt-0.5 w-4 h-4 rounded-full border-2 shrink-0"
-                        :class="(s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'done'
-                          ? 'bg-teal-500 border-teal-500'
-                          : 'border-gray-300'"
-                      ></span>
-                      <span class="text-sm text-gray-700">{{ c }}</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <!-- Wins -->
-                <div v-if="s.wins">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Wins</p>
-                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.wins }}</p>
-                </div>
-
-                <!-- Watch-fors -->
-                <div v-if="s.watch_fors">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Watch-fors</p>
-                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.watch_fors }}</p>
-                </div>
-
-                <!-- Notes for client -->
-                <div v-if="s.public_notes">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes for Client</p>
-                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.public_notes }}</p>
-                </div>
-
-                <!-- Private notes -->
-                <div v-if="s.notes">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Private Notes</p>
-                  <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ s.notes }}</p>
-                </div>
-
-                <!-- Pre-session reflection -->
-                <div v-if="(s._presessionReflections as Record<string, unknown>[])?.length">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pre-Session Reflection</p>
-                  <div class="bg-gray-50 rounded-lg p-3 space-y-2">
-                    <div v-if="(s._presessionReflections as Record<string, unknown>[])[0]?.week_summary">
-                      <p class="text-xs text-gray-500 font-medium">Week summary</p>
-                      <p class="text-sm text-gray-700">{{ (s._presessionReflections as Record<string, unknown>[])[0].week_summary }}</p>
-                    </div>
-                    <div v-if="(s._presessionReflections as Record<string, unknown>[])[0]?.agenda">
-                      <p class="text-xs text-gray-500 font-medium">Agenda</p>
-                      <p class="text-sm text-gray-700">{{ (s._presessionReflections as Record<string, unknown>[])[0].agenda }}</p>
-                    </div>
-                  </div>
-                </div>
-
               </div>
             </div>
           </div>
