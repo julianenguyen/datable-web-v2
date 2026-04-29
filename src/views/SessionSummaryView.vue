@@ -14,10 +14,13 @@ const summaryId = route.query.summaryId as string | undefined
 const isEditing = computed(() => !!summaryId)
 
 const clientName = ref<string>('')
+const title = ref('')
 const themes = ref('')
 const strategies = ref('')
 const commitments = ref<string[]>([''])
 const watchFors = ref('')
+const wins = ref('')
+const publicNotes = ref('')
 const notes = ref('')
 const loading = ref(false)
 const submitted = ref(false)
@@ -35,14 +38,17 @@ onMounted(async () => {
   if (summaryId) {
     const { data: summary } = await supabase
       .from('session_summaries')
-      .select('themes, strategies, commitments, watch_fors, notes')
+      .select('title, themes, strategies, commitments, watch_fors, wins, public_notes, notes')
       .eq('id', summaryId)
       .single()
     if (summary) {
+      title.value = summary.title ?? ''
       themes.value = summary.themes ?? ''
       strategies.value = summary.strategies ?? ''
       commitments.value = (summary.commitments as string[]).length > 0 ? summary.commitments as string[] : ['']
       watchFors.value = summary.watch_fors ?? ''
+      wins.value = summary.wins ?? ''
+      publicNotes.value = summary.public_notes ?? ''
       notes.value = summary.notes ?? ''
     }
   }
@@ -79,10 +85,13 @@ async function confirmSave() {
       const { error: updateError } = await supabase
         .from('session_summaries')
         .update({
+          title: title.value.trim() || null,
           themes: themes.value.trim(),
           strategies: strategies.value.trim(),
           commitments: filled,
           watch_fors: watchFors.value.trim() || null,
+          wins: wins.value.trim() || null,
+          public_notes: publicNotes.value.trim() || null,
           notes: notes.value.trim() || null,
         })
         .eq('id', summaryId!)
@@ -112,10 +121,13 @@ async function confirmSave() {
         .from('session_summaries')
         .insert({
           cycle_id: resolvedCycleId,
+          title: title.value.trim() || null,
           themes: themes.value.trim(),
           strategies: strategies.value.trim(),
           commitments: filled,
           watch_fors: watchFors.value.trim() || null,
+          wins: wins.value.trim() || null,
+          public_notes: publicNotes.value.trim() || null,
           notes: notes.value.trim() || null,
         })
 
@@ -154,6 +166,18 @@ async function confirmSave() {
       </div>
 
       <form @submit.prevent="handleSubmit" class="space-y-5">
+        <!-- Title -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <label class="block text-sm font-semibold text-gray-900 mb-1">Summary title</label>
+          <p class="text-xs text-gray-500 mb-3">Shown to the client. Defaults to "Session Summary" if left blank.</p>
+          <input
+            v-model="title"
+            type="text"
+            placeholder="Session Summary"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-gray-400"
+          />
+        </div>
+
         <!-- Session themes -->
         <div class="bg-white border border-gray-200 rounded-xl p-5">
           <label class="block text-sm font-semibold text-gray-900 mb-1">
@@ -224,6 +248,18 @@ async function confirmSave() {
           </button>
         </div>
 
+        <!-- Wins -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <label class="block text-sm font-semibold text-gray-900 mb-1">Wins</label>
+          <p class="text-xs text-gray-500 mb-3">Progress or breakthroughs to celebrate — visible to the client (optional)</p>
+          <textarea
+            v-model="wins"
+            rows="3"
+            placeholder="e.g., Client initiated a difficult conversation with their partner for the first time. Noticed and named their anxiety before it escalated…"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-gray-400 resize-none"
+          />
+        </div>
+
         <!-- Watch-fors -->
         <div class="bg-white border border-gray-200 rounded-xl p-5">
           <label class="block text-sm font-semibold text-gray-900 mb-1">Watch-fors</label>
@@ -232,6 +268,18 @@ async function confirmSave() {
             v-model="watchFors"
             rows="2"
             placeholder="e.g., Watch for signs of isolation — client mentioned feeling disconnected from friends this week…"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-gray-400 resize-none"
+          />
+        </div>
+
+        <!-- Public notes -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <label class="block text-sm font-semibold text-gray-900 mb-1">Notes for client</label>
+          <p class="text-xs text-gray-500 mb-3">Visible to the client — any additional context or encouragement (optional)</p>
+          <textarea
+            v-model="publicNotes"
+            rows="3"
+            placeholder="e.g., You showed a lot of courage in today's session. Keep leaning into the discomfort — that's where the growth is…"
             class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-gray-400 resize-none"
           />
         </div>

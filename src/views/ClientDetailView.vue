@@ -1213,7 +1213,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                     <span class="text-sm font-medium text-gray-900 shrink-0">
                       {{ cycle.session_date ? formatDate(cycle.session_date as string) : 'No date' }}
                     </span>
-                    <span class="shrink-0 inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">📝 Summary</span>
+                    <span class="shrink-0 inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">📝 {{ ((cycle.session_summaries as Record<string, unknown>[])[0]).title || 'Session Summary' }}</span>
                     <template v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).commitments as string[] | undefined">
                       <span
                         class="shrink-0 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
@@ -1261,7 +1261,15 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                       </li>
                     </ul>
                   </div>
+                  <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).wins" class="bg-green-50 border border-green-100 rounded-lg px-3 py-3">
+                    <p class="text-xs font-semibold text-green-600 uppercase tracking-wide mb-1">🎉 Wins</p>
+                    <p class="text-sm text-green-900 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).wins }}</p>
+                  </div>
                   <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors"><p class="text-xs text-gray-400 mb-1">Watch-fors</p><p class="text-sm text-gray-800 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).watch_fors }}</p></div>
+                  <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).public_notes" class="bg-blue-50 border border-blue-100 rounded-lg px-3 py-3">
+                    <p class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">📋 Notes for client</p>
+                    <p class="text-sm text-blue-900 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).public_notes }}</p>
+                  </div>
                   <div v-if="((cycle.session_summaries as Record<string, unknown>[])[0]).notes" class="bg-amber-50 border border-amber-100 rounded-lg px-3 py-3">
                     <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-1">🔒 Private note</p>
                     <p class="text-sm text-amber-900 leading-relaxed">{{ ((cycle.session_summaries as Record<string, unknown>[])[0]).notes }}</p>
