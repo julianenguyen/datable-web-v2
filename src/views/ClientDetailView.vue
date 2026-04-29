@@ -1134,35 +1134,35 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
               <div v-if="log.went_well">
                 <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">What went well</p>
                 <p class="text-sm text-gray-800">{{ log.went_well }}</p>
+                <!-- Wheel of life tags for went_well -->
+                <div
+                  v-if="(log.wheel_of_life_entries as Record<string, unknown>[])?.filter((e: Record<string, unknown>) => e.question_type === 'went_well').length > 0"
+                  class="flex flex-wrap gap-1.5 mt-2"
+                >
+                  <span
+                    v-for="(entry, i) in (log.wheel_of_life_entries as Record<string, unknown>[]).filter((e: Record<string, unknown>) => e.question_type === 'went_well')"
+                    :key="i"
+                    class="text-xs font-medium px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-100"
+                  >
+                    {{ WHEEL_OF_LIFE[entry.category as keyof typeof WHEEL_OF_LIFE]?.label ?? entry.category }}
+                  </span>
+                </div>
               </div>
               <div v-if="log.weighing_on">
                 <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">What is weighing on you</p>
                 <p class="text-sm text-gray-800">{{ log.weighing_on }}</p>
-              </div>
-
-              <!-- Wheel of Life entries -->
-              <div v-if="(log.wheel_of_life_entries as unknown[])?.length > 0">
-                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Wheel of Life</p>
-                <div class="space-y-2">
-                  <div
-                    v-for="(entry, i) in (log.wheel_of_life_entries as Record<string, unknown>[])"
+                <!-- Wheel of life tags for weighing_on -->
+                <div
+                  v-if="(log.wheel_of_life_entries as Record<string, unknown>[])?.filter((e: Record<string, unknown>) => e.question_type === 'weighing_on').length > 0"
+                  class="flex flex-wrap gap-1.5 mt-2"
+                >
+                  <span
+                    v-for="(entry, i) in (log.wheel_of_life_entries as Record<string, unknown>[]).filter((e: Record<string, unknown>) => e.question_type === 'weighing_on')"
                     :key="i"
-                    class="bg-gray-50 rounded-lg p-3"
+                    class="text-xs font-medium px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-100"
                   >
-                    <div class="flex items-center gap-2 mb-1">
-                      <span class="text-xs font-semibold text-teal-700">
-                        {{ WHEEL_OF_LIFE[entry.category as keyof typeof WHEEL_OF_LIFE]?.label ?? entry.category }}
-                      </span>
-                      <span
-                        v-for="sub in (entry.subcategories as string[])"
-                        :key="sub"
-                        class="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-600 border border-teal-100"
-                      >
-                        {{ sub }}
-                      </span>
-                    </div>
-                    <p v-if="entry.note" class="text-sm text-gray-700">{{ entry.note }}</p>
-                  </div>
+                    {{ WHEEL_OF_LIFE[entry.category as keyof typeof WHEEL_OF_LIFE]?.label ?? entry.category }}
+                  </span>
                 </div>
               </div>
             </div>
