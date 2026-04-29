@@ -27,6 +27,10 @@ const total = ref(0)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const expanded = ref<Set<string>>(new Set())
+const editingNoteId = ref<string | null>(null)
+const editNoteText = ref('')
+const savingNote = ref(false)
+const saveNoteError = ref<string | null>(null)
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -60,6 +64,43 @@ async function loadMilestones() {
     error.value = 'Failed to load milestones.'
   } finally {
     loading.value = false
+  }
+}
+
+function startEditNote(m: Milestone) {
+  editingNoteId.value = m.id
+  editNoteText.value = m.therapist_note ?? ''
+  saveNoteError.value = null
+}
+
+function cancelEditNote() {
+  editingNoteId.value = null
+  editNoteText.value = ''
+  saveNoteError.value = null
+}
+
+async function saveNote(milestoneId: string) {
+  savingNote.value = true
+  saveNoteError.value = null
+  try {
+    const { data: session } = await supabase.auth.getSession()
+    const res = await fetch(`${EDGE_FUNCTION_URL}/milestones/${milestoneId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${session.session?.access_token ?? ''}`,
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ therapist_note: editNoteText.value.trim() || null }),
+    })
+    if (!res.ok) throw new Error('Failed')
+    const m = milestones.value.find(m => m.id === milestoneId)
+    if (m) m.therapist_note = editNoteText.value.trim() || null
+    cancelEditNote()
+  } catch {
+    saveNoteError.value = 'Failed to save. Please try again.'
+  } finally {
+    savingNote.value = false
   }
 }
 
@@ -128,9 +169,45 @@ onMounted(loadMilestones)
           </div>
 
           <!-- Therapist note -->
-          <div v-if="m.therapist_note">
-            <p class="text-xs font-medium text-gray-500 mb-1">Therapist's note:</p>
-            <p class="text-sm text-gray-700 italic leading-relaxed">{{ m.therapist_note }}</p>
+          <div>
+            <div v-if="editingNoteId !== m.id">
+              <div class="flex items-center justify-between mb-1">
+                <p class="text-xs font-medium text-gray-500">Note for client</p>
+                <button
+                  @click.stop="startEditNote(m)"
+                  class="text-xs text-teal-600 hover:text-teal-700 transition-colors"
+                >
+                  {{ m.therapist_note ? 'Edit' : '+ Add note' }}
+                </button>
+              </div>
+              <p v-if="m.therapist_note" class="text-sm text-gray-700 italic leading-relaxed">{{ m.therapist_note }}</p>
+              <p v-else class="text-xs text-gray-400">No note yet. Add one to give {{ clientFirstName }} more context.</p>
+            </div>
+            <div v-else @click.stop>
+              <p class="text-xs font-medium text-gray-500 mb-1.5">Note for client</p>
+              <textarea
+                v-model="editNoteText"
+                rows="3"
+                maxlength="500"
+                :placeholder="`Add a note for ${clientFirstName}…`"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-gray-400 resize-none"
+              />
+              <p class="text-xs text-right mt-0.5 mb-2" :class="editNoteText.length > 450 ? 'text-red-500' : 'text-gray-400'">
+                {{ editNoteText.length }} / 500
+              </p>
+              <p v-if="saveNoteError" class="text-xs text-red-600 mb-2">{{ saveNoteError }}</p>
+              <div class="flex items-center gap-2">
+                <button
+                  @click.stop="saveNote(m.id)"
+                  :disabled="savingNote"
+                  class="px-3 py-1.5 text-xs font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-60 rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  <span v-if="savingNote" class="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                  {{ savingNote ? 'Saving…' : 'Save' }}
+                </button>
+                <button @click.stop="cancelEditNote" class="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
+              </div>
+            </div>
           </div>
 
           <!-- Data callout -->
