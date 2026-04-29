@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import { useOnboardingStore } from '@/stores/onboarding'
+import type { EmailOtpType } from '@supabase/supabase-js'
 
 const router = useRouter()
 const route = useRoute()
@@ -13,25 +14,45 @@ const onboarding = useOnboardingStore()
 const error = ref('')
 
 onMounted(async () => {
-  const code = route.query.code as string | undefined
-
-  if (!code) {
-    error.value = 'Invalid confirmation link. Please try signing up again.'
-    return
-  }
-
   try {
-    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+    // getSession() auto-detects ?code= or #access_token= via detectSessionInUrl.
+    // If it already exchanged the code, we'll have a session here.
+    const { data: { session: existingSession } } = await supabase.auth.getSession()
 
-    if (exchangeError) throw exchangeError
-    if (!data.session?.user) throw new Error('No session returned.')
+    if (existingSession?.user) {
+      auth.user = existingSession.user as typeof auth.user
+      await onboarding.loadProgress(existingSession.user.id)
+      router.replace(onboarding.currentStepRoute === '/' ? '/' : onboarding.currentStepRoute)
+      return
+    }
 
-    auth.user = data.session.user as typeof auth.user
+    // Fallback: handle ?token_hash= (Supabase email confirmation format)
+    const token_hash = route.query.token_hash as string | undefined
+    const type = route.query.type as EmailOtpType | undefined
 
-    await onboarding.loadProgress(data.session.user.id)
+    if (token_hash && type) {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({ token_hash, type })
+      if (verifyError) throw verifyError
+      if (!data.session?.user) throw new Error('No session returned.')
+      auth.user = data.session.user as typeof auth.user
+      await onboarding.loadProgress(data.session.user.id)
+      router.replace(onboarding.currentStepRoute === '/' ? '/' : onboarding.currentStepRoute)
+      return
+    }
 
-    const destination = onboarding.currentStepRoute
-    router.replace(destination === '/' ? '/' : destination)
+    // Fallback: handle ?code= explicitly (PKCE)
+    const code = route.query.code as string | undefined
+    if (code) {
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      if (exchangeError) throw exchangeError
+      if (!data.session?.user) throw new Error('No session returned.')
+      auth.user = data.session.user as typeof auth.user
+      await onboarding.loadProgress(data.session.user.id)
+      router.replace(onboarding.currentStepRoute === '/' ? '/' : onboarding.currentStepRoute)
+      return
+    }
+
+    error.value = 'Invalid confirmation link. Please try signing up again.'
   } catch (e: unknown) {
     error.value = (e as { message?: string })?.message ?? 'Email confirmation failed. Please try signing up again.'
   }
@@ -57,10 +78,7 @@ onMounted(async () => {
         </div>
         <h2 class="text-base font-semibold text-gray-900 mb-2">Confirmation failed</h2>
         <p class="text-sm text-gray-500 mb-5">{{ error }}</p>
-        <router-link
-          to="/signup"
-          class="text-sm font-medium text-teal-600 hover:text-teal-700"
-        >
+        <router-link to="/signup" class="text-sm font-medium text-teal-600 hover:text-teal-700">
           Back to sign up
         </router-link>
       </div>

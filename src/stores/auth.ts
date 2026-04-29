@@ -103,7 +103,13 @@ export const useAuthStore = defineStore('auth', () => {
     if (error) throw error
     if (!data.user) throw new Error('Signup failed — no user returned.')
 
-    user.value = data.user
+    // Only set user if we got a real session (email confirmation disabled).
+    // When confirmation is required, session is null — don't set user here or
+    // the router treats the user as authenticated without a JWT, causing every
+    // DB call to run anonymously and fail RLS.
+    if (data.session) {
+      user.value = data.session.user
+    }
     // onboarding_progress row is created automatically via DB trigger (handle_new_provider_user)
     return data.user
   }
