@@ -96,6 +96,14 @@ const sessionsLoading = ref(false)
 const showScheduleModal = ref(false)
 const savingSession = ref(false)
 
+// Edit session modal
+const showEditSessionModal = ref(false)
+const editingSessionId = ref<string | null>(null)
+const editingSessionSeriesId = ref<string | null>(null)
+const editingSessionRecurrence = ref<string | null>(null)
+const savingEditSession = ref(false)
+const editSessionForm = ref({ date: '', time: '' })
+
 // Calendar
 const calendarYear = ref(new Date().getFullYear())
 const calendarMonth = ref(new Date().getMonth()) // 0-indexed
@@ -259,6 +267,48 @@ async function cancelSession(sessionId: string, wholeSeriesId: string | null) {
     await supabase.from('sessions').update({ status: 'cancelled' }).eq('id', sessionId)
   }
   await loadSessions()
+}
+
+function openEditSession(s: ScheduledSession) {
+  editingSessionId.value = s.id
+  editingSessionSeriesId.value = s.series_id
+  editingSessionRecurrence.value = s.recurrence_rule
+  editSessionForm.value = {
+    date: s.session_date,
+    time: s.session_time ? s.session_time.slice(0, 5) : '',
+  }
+  showEditSessionModal.value = true
+}
+
+async function saveEditSession() {
+  if (!editingSessionId.value || !editSessionForm.value.date) return
+  savingEditSession.value = true
+  try {
+    const payload = {
+      session_date: editSessionForm.value.date,
+      session_time: editSessionForm.value.time || null,
+    }
+
+    if (editingSessionSeriesId.value && editingSessionRecurrence.value && editingSessionRecurrence.value !== 'none') {
+      const updateAll = confirm('Update all future sessions in this series too?\n\nOK = update entire series\nCancel = update just this one')
+      if (updateAll) {
+        await supabase.from('sessions')
+          .update(payload)
+          .eq('series_id', editingSessionSeriesId.value)
+          .eq('status', 'scheduled')
+          .gte('session_date', editSessionForm.value.date)
+      } else {
+        await supabase.from('sessions').update(payload).eq('id', editingSessionId.value)
+      }
+    } else {
+      await supabase.from('sessions').update(payload).eq('id', editingSessionId.value)
+    }
+
+    showEditSessionModal.value = false
+    await loadSessions()
+  } finally {
+    savingEditSession.value = false
+  }
 }
 
 function startEdit(cycle: Record<string, unknown>) {
@@ -1267,10 +1317,16 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                     </p>
                   </div>
                 </div>
-                <button
-                  @click="cancelSession(s.id, s.series_id)"
-                  class="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded"
-                >Cancel</button>
+                <div class="flex items-center gap-1">
+                  <button
+                    @click="openEditSession(s)"
+                    class="text-xs text-gray-400 hover:text-teal-600 transition-colors px-2 py-1 rounded"
+                  >Edit</button>
+                  <button
+                    @click="cancelSession(s.id, s.series_id)"
+                    class="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded"
+                  >Cancel</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1576,6 +1632,49 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           :insurance-status="insuranceStatus"
         />
       </div>
+
+      <!-- ── Edit Session Modal ── -->
+      <Teleport to="body">
+        <div v-if="showEditSessionModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showEditSessionModal = false">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div class="flex items-center justify-between mb-5">
+              <h2 class="text-base font-semibold text-gray-900">Edit Session</h2>
+              <button @click="showEditSessionModal = false" class="text-gray-400 hover:text-gray-600"><X class="w-5 h-5" /></button>
+            </div>
+
+            <div class="space-y-4">
+              <!-- Date -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Date <span class="text-red-500">*</span></label>
+                <input v-model="editSessionForm.date" type="date" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+
+              <!-- Time -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Time <span class="text-xs font-normal text-gray-400">(optional)</span></label>
+                <input v-model="editSessionForm.time" type="time" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+
+              <!-- Recurrence notice -->
+              <p v-if="editingSessionRecurrence && editingSessionRecurrence !== 'none'" class="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                This is part of a recurring series ({{ editingSessionRecurrence }}). You'll be asked whether to update just this session or all future ones.
+              </p>
+            </div>
+
+            <div class="flex gap-2 mt-6">
+              <button
+                @click="saveEditSession"
+                :disabled="savingEditSession || !editSessionForm.date"
+                class="flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+              >
+                <span v-if="savingEditSession" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                {{ savingEditSession ? 'Saving…' : 'Save changes' }}
+              </button>
+              <button @click="showEditSessionModal = false" class="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- ── Schedule Session Modal ── -->
       <Teleport to="body">
