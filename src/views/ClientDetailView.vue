@@ -1126,109 +1126,6 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
       <!-- ── TAB 3: SESSION HISTORY ── -->
       <div v-else-if="activeTab === 'history'" class="space-y-6">
 
-        <!-- ── Calendar + Upcoming side by side ── -->
-        <div class="flex items-start gap-5">
-
-          <!-- Calendar (compact, fixed width) -->
-          <div class="shrink-0 w-72 bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <!-- Calendar header -->
-            <div class="flex items-center justify-between px-3 py-3 border-b border-gray-100">
-              <div class="flex items-center gap-1.5">
-                <button @click="prevMonth" class="p-1 hover:bg-gray-100 rounded-md transition-colors">
-                  <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-                </button>
-                <h2 class="text-xs font-semibold text-gray-900 w-28 text-center">{{ MONTH_NAMES[calendarMonth] }} {{ calendarYear }}</h2>
-                <button @click="nextMonth" class="p-1 hover:bg-gray-100 rounded-md transition-colors">
-                  <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-                </button>
-              </div>
-              <button
-                @click="showScheduleModal = true"
-                class="flex items-center gap-1 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
-              >
-                <Plus class="w-3 h-3" />
-                Schedule
-              </button>
-            </div>
-
-            <!-- Day-of-week headers -->
-            <div class="grid grid-cols-7 border-b border-gray-100">
-              <div v-for="d in ['S','M','T','W','T','F','S']" :key="d"
-                class="py-1.5 text-center text-xs font-medium text-gray-400">{{ d }}</div>
-            </div>
-
-            <!-- Calendar grid -->
-            <div class="grid grid-cols-7">
-              <div
-                v-for="(day, i) in calendarDays"
-                :key="i"
-                class="min-h-10 border-b border-r border-gray-50 p-1 last:border-r-0"
-                :class="{ 'bg-gray-50/50': !day }"
-              >
-                <template v-if="day">
-                  <span
-                    class="text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full"
-                    :class="calendarDateStr(day) === new Date().toISOString().split('T')[0]
-                      ? 'bg-teal-600 text-white'
-                      : 'text-gray-700'"
-                  >{{ day }}</span>
-                  <!-- Session dot -->
-                  <div v-if="sessionsOnDay(day).length > 0" class="mt-0.5">
-                    <div
-                      v-for="s in sessionsOnDay(day)"
-                      :key="s.id"
-                      class="group relative flex items-center gap-0.5 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded px-1 py-0.5 cursor-default transition-colors"
-                    >
-                      <span class="w-1 h-1 rounded-full bg-teal-500 shrink-0"></span>
-                      <span class="text-[10px] text-teal-700 truncate leading-none">
-                        {{ s.session_time ? s.session_time.slice(0,5) : '·' }}
-                      </span>
-                      <button
-                        @click.stop="cancelSession(s.id, s.series_id)"
-                        class="ml-auto opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all text-[10px] leading-none"
-                        title="Cancel"
-                      >✕</button>
-                    </div>
-                  </div>
-                </template>
-              </div>
-            </div>
-          </div>
-
-          <!-- Upcoming sessions (fills remaining space) -->
-          <div class="flex-1 min-w-0">
-            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Upcoming Sessions</h3>
-            <div v-if="sessionsLoading" class="text-sm text-gray-400 py-4 text-center">Loading…</div>
-            <div v-else-if="sessions.filter(s => s.session_date >= new Date().toISOString().split('T')[0] && s.status === 'scheduled').length === 0"
-              class="text-sm text-gray-400 py-8 text-center">No upcoming sessions scheduled.</div>
-            <div v-else class="space-y-2">
-              <div
-                v-for="s in sessions.filter(s => s.session_date >= new Date().toISOString().split('T')[0] && s.status === 'scheduled').slice(0, 8)"
-                :key="s.id"
-                class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3"
-              >
-                <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                  </div>
-                  <div>
-                    <p class="text-sm font-medium text-gray-900">{{ formatDate(s.session_date) }}</p>
-                    <p class="text-xs text-gray-400">
-                      {{ s.session_time ? s.session_time.slice(0,5) : 'No time set' }}
-                      <span v-if="s.recurrence_rule" class="ml-2 capitalize">· {{ s.recurrence_rule }}</span>
-                    </p>
-                  </div>
-                </div>
-                <button
-                  @click="cancelSession(s.id, s.series_id)"
-                  class="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded"
-                >Cancel</button>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
         <!-- ── Post-session summaries ── -->
         <div>
           <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Session Notes</h3>
@@ -1348,6 +1245,109 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
               </template>
             </div>
           </div>
+        </div>
+
+        <!-- ── Calendar + Upcoming side by side ── -->
+        <div class="flex items-start gap-5">
+
+          <!-- Calendar (compact, fixed width) -->
+          <div class="shrink-0 w-72 bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <!-- Calendar header -->
+            <div class="flex items-center justify-between px-3 py-3 border-b border-gray-100">
+              <div class="flex items-center gap-1.5">
+                <button @click="prevMonth" class="p-1 hover:bg-gray-100 rounded-md transition-colors">
+                  <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <h2 class="text-xs font-semibold text-gray-900 w-28 text-center">{{ MONTH_NAMES[calendarMonth] }} {{ calendarYear }}</h2>
+                <button @click="nextMonth" class="p-1 hover:bg-gray-100 rounded-md transition-colors">
+                  <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                </button>
+              </div>
+              <button
+                @click="showScheduleModal = true"
+                class="flex items-center gap-1 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                <Plus class="w-3 h-3" />
+                Schedule
+              </button>
+            </div>
+
+            <!-- Day-of-week headers -->
+            <div class="grid grid-cols-7 border-b border-gray-100">
+              <div v-for="d in ['S','M','T','W','T','F','S']" :key="d"
+                class="py-1.5 text-center text-xs font-medium text-gray-400">{{ d }}</div>
+            </div>
+
+            <!-- Calendar grid -->
+            <div class="grid grid-cols-7">
+              <div
+                v-for="(day, i) in calendarDays"
+                :key="i"
+                class="min-h-10 border-b border-r border-gray-50 p-1 last:border-r-0"
+                :class="{ 'bg-gray-50/50': !day }"
+              >
+                <template v-if="day">
+                  <span
+                    class="text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full"
+                    :class="calendarDateStr(day) === new Date().toISOString().split('T')[0]
+                      ? 'bg-teal-600 text-white'
+                      : 'text-gray-700'"
+                  >{{ day }}</span>
+                  <!-- Session dot -->
+                  <div v-if="sessionsOnDay(day).length > 0" class="mt-0.5">
+                    <div
+                      v-for="s in sessionsOnDay(day)"
+                      :key="s.id"
+                      class="group relative flex items-center gap-0.5 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded px-1 py-0.5 cursor-default transition-colors"
+                    >
+                      <span class="w-1 h-1 rounded-full bg-teal-500 shrink-0"></span>
+                      <span class="text-[10px] text-teal-700 truncate leading-none">
+                        {{ s.session_time ? s.session_time.slice(0,5) : '·' }}
+                      </span>
+                      <button
+                        @click.stop="cancelSession(s.id, s.series_id)"
+                        class="ml-auto opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all text-[10px] leading-none"
+                        title="Cancel"
+                      >✕</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Upcoming sessions (fills remaining space) -->
+          <div class="flex-1 min-w-0">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Upcoming Sessions</h3>
+            <div v-if="sessionsLoading" class="text-sm text-gray-400 py-4 text-center">Loading…</div>
+            <div v-else-if="sessions.filter(s => s.session_date >= new Date().toISOString().split('T')[0] && s.status === 'scheduled').length === 0"
+              class="text-sm text-gray-400 py-8 text-center">No upcoming sessions scheduled.</div>
+            <div v-else class="space-y-2">
+              <div
+                v-for="s in sessions.filter(s => s.session_date >= new Date().toISOString().split('T')[0] && s.status === 'scheduled').slice(0, 8)"
+                :key="s.id"
+                class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-gray-900">{{ formatDate(s.session_date) }}</p>
+                    <p class="text-xs text-gray-400">
+                      {{ s.session_time ? s.session_time.slice(0,5) : 'No time set' }}
+                      <span v-if="s.recurrence_rule" class="ml-2 capitalize">· {{ s.recurrence_rule }}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  @click="cancelSession(s.id, s.series_id)"
+                  class="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded"
+                >Cancel</button>
+              </div>
+            </div>
+          </div>
+
         </div>
 
       </div>
