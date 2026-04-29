@@ -444,7 +444,7 @@ async function loadSessionHistory() {
       presession_reflections (id, week_summary, progress, agenda, session_intent, submitted_at)
     `)
     .eq('client_id', clientId)
-    .order('session_date', { ascending: false })
+    .order('created_at', { ascending: false })
 
   sessionHistory.value = data ?? []
 }
