@@ -141,7 +141,7 @@ async function handleContinue() {
     const profileName = (auth.user.user_metadata?.name as string) || ''
     const { error: dbError } = await supabase
       .from('clinicians')
-      .insert({
+      .upsert({
         id: auth.user.id,
         practice_id: onboarding.practiceId,
         role: 'owner',

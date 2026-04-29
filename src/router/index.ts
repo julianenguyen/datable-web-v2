@@ -24,6 +24,12 @@ const router = createRouter({
       component: () => import('@/views/onboarding/VerifyEmailView.vue'),
       meta: { public: true },
     },
+    {
+      path: '/auth/callback',
+      name: 'auth-callback',
+      component: () => import('@/views/AuthCallbackView.vue'),
+      meta: { public: true },
+    },
 
     // Onboarding (authenticated but incomplete)
     {

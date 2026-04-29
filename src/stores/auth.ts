@@ -96,7 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
       email,
       password,
       options: {
-        emailRedirectTo: window.location.origin + '/onboarding/practice',
+        emailRedirectTo: window.location.origin + '/auth/callback',
         data: { name },
       },
     })
