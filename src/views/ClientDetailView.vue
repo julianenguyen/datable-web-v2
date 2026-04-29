@@ -57,6 +57,15 @@ const briefData = ref<{ id: string; content: Record<string, unknown>; generated_
 const briefError = ref<string | null>(null)
 const drawerOpen = ref(false)
 
+// Past session briefs (keyed by session_id)
+interface PastSessionBrief {
+  id: string
+  content: Record<string, unknown>
+  generated_at: string
+  session_id: string
+}
+const pastSessionBriefs = ref<Record<string, PastSessionBrief>>({})
+
 // Archive / unarchive
 const clientStatus = ref<string>('active') // 'active' | 'pending' | 'archived'
 const showArchiveModal = ref(false)
@@ -149,6 +158,24 @@ async function loadSessions() {
     .order('session_date', { ascending: true })
   sessions.value = (data ?? []) as ScheduledSession[]
   sessionsLoading.value = false
+  await loadPastSessionBriefs()
+}
+
+async function loadPastSessionBriefs() {
+  const today = new Date().toISOString().split('T')[0]
+  const pastIds = sessions.value
+    .filter(s => s.session_date < today && s.status !== 'cancelled')
+    .map(s => s.id)
+  if (pastIds.length === 0) return
+  const { data } = await supabase
+    .from('presession_briefs')
+    .select('id, content, generated_at, session_id')
+    .in('session_id', pastIds)
+  const map: Record<string, PastSessionBrief> = {}
+  for (const b of data ?? []) {
+    if (b.session_id) map[b.session_id] = b as PastSessionBrief
+  }
+  pastSessionBriefs.value = map
 }
 
 function expandDates(startDate: string, recurrence: string, endDate: string): string[] {
@@ -530,8 +557,13 @@ async function generateBrief(cycleId: string) {
   generatingBrief.value = true
   briefError.value = null
   try {
+    const today = new Date().toISOString().split('T')[0]
+    const nextSession = sessions.value
+      .filter(s => s.session_date >= today && s.status === 'scheduled')
+      .sort((a, b) => a.session_date.localeCompare(b.session_date))[0] ?? null
+
     const { data, error } = await supabase.functions.invoke('generate-presession-brief', {
-      body: { clientId, cycleId },
+      body: { clientId, cycleId, sessionId: nextSession?.id ?? null },
     })
     if (error) {
       // Extract the actual error body from the edge function response
@@ -590,6 +622,13 @@ function sleepHours(minutes: number | null) {
 const activeCycle = computed(() =>
   sessionHistory.value.find((c: Record<string, unknown>) => c.status === 'active') as Record<string, unknown> | undefined
 )
+
+const pastSessions = computed(() => {
+  const today = new Date().toISOString().split('T')[0]
+  return sessions.value
+    .filter(s => s.session_date < today && s.status !== 'cancelled')
+    .sort((a, b) => b.session_date.localeCompare(a.session_date))
+})
 
 // ── All summaries flattened across cycles, newest first ──
 const allSummaries = computed(() => {
@@ -1236,6 +1275,102 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
             </div>
           </div>
 
+        </div>
+
+        <!-- ── Past Sessions ── -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Past Sessions</h3>
+          <div v-if="pastSessions.length === 0" class="text-sm text-gray-400 py-4 text-center">No past sessions yet.</div>
+          <div v-else class="space-y-3">
+            <div
+              v-for="s in pastSessions"
+              :key="s.id"
+              class="bg-white border border-gray-200 rounded-xl overflow-hidden"
+            >
+              <!-- Session header row -->
+              <div
+                class="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                @click="toggleCycle('past-' + s.id)"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-gray-900">{{ formatDate(s.session_date) }}</p>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                      {{ s.session_time ? s.session_time.slice(0,5) : 'No time recorded' }}
+                      <span v-if="pastSessionBriefs[s.id]" class="ml-2 text-teal-600">· Pre-session brief available</span>
+                    </p>
+                  </div>
+                </div>
+                <svg
+                  class="w-4 h-4 text-gray-400 transition-transform"
+                  :class="expandedCycles.has('past-' + s.id) ? 'rotate-180' : ''"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                ><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+
+              <!-- Expanded: pre-session brief -->
+              <div v-if="expandedCycles.has('past-' + s.id)" class="border-t border-gray-100 px-5 py-5">
+                <div v-if="pastSessionBriefs[s.id]" class="space-y-5">
+                  <div class="flex items-center justify-between">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pre-Session Brief</p>
+                    <p class="text-xs text-gray-400">Generated {{ new Date(pastSessionBriefs[s.id].generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}</p>
+                  </div>
+
+                  <!-- Cycle summary -->
+                  <div v-if="(pastSessionBriefs[s.id].content as Record<string, unknown>).cycle_summary">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cycle Summary</p>
+                    <p class="text-sm text-gray-700 leading-relaxed">{{ (pastSessionBriefs[s.id].content as Record<string, unknown>).cycle_summary }}</p>
+                  </div>
+
+                  <!-- Pre-session reflection -->
+                  <div v-if="(pastSessionBriefs[s.id].content as Record<string, unknown>).presession_reflection">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Patient Reflection</p>
+                    <div class="bg-gray-50 rounded-lg p-3 space-y-2">
+                      <template v-for="[key, label] in [['week_summary','Week summary'],['progress','Progress'],['agenda','Agenda'],['session_intent','Session intent']]" :key="key">
+                        <div v-if="((pastSessionBriefs[s.id].content as Record<string, unknown>).presession_reflection as Record<string, unknown>)?.[key]">
+                          <p class="text-xs text-gray-500 font-medium">{{ label }}</p>
+                          <p class="text-sm text-gray-700">{{ ((pastSessionBriefs[s.id].content as Record<string, unknown>).presession_reflection as Record<string, unknown>)[key] }}</p>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+
+                  <!-- Suggested openers -->
+                  <div v-if="((pastSessionBriefs[s.id].content as Record<string, unknown>).suggested_openers as string[])?.length">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Suggested Openers</p>
+                    <ul class="space-y-1.5">
+                      <li
+                        v-for="(opener, i) in (pastSessionBriefs[s.id].content as Record<string, unknown>).suggested_openers as string[]"
+                        :key="i"
+                        class="text-sm text-gray-700 flex gap-2"
+                      >
+                        <span class="text-gray-400 shrink-0">{{ i + 1 }}.</span>{{ opener }}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <!-- Flagged events -->
+                  <div v-if="((pastSessionBriefs[s.id].content as Record<string, unknown>).flagged_events as unknown[])?.length">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Flagged Events</p>
+                    <div class="space-y-2">
+                      <div
+                        v-for="(ev, i) in (pastSessionBriefs[s.id].content as Record<string, unknown>).flagged_events as Record<string, unknown>[]"
+                        :key="i"
+                        class="bg-red-50 border border-red-100 rounded-lg px-3 py-2"
+                      >
+                        <p class="text-xs font-medium text-red-700">{{ ev.log_date }} · Mood {{ ev.mood_score ?? '—' }}</p>
+                        <p class="text-sm text-red-800 mt-0.5">{{ ev.summary }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="text-sm text-gray-400">No pre-session brief was generated for this session.</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ── Session Notes ── -->
