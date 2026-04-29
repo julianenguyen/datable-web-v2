@@ -132,6 +132,11 @@ async function confirmSave() {
         })
 
       if (summaryError) throw summaryError
+
+      // Close this cycle and open a fresh one for the next session
+      const userId = (await supabase.auth.getUser()).data.user?.id
+      await supabase.from('session_cycles').update({ status: 'completed' }).eq('id', resolvedCycleId!)
+      await supabase.from('session_cycles').insert({ client_id: clientId, therapist_id: userId, status: 'active' })
     }
 
     submitted.value = true
@@ -286,8 +291,8 @@ async function confirmSave() {
 
         <!-- Notes -->
         <div class="bg-white border border-gray-200 rounded-xl p-5">
-          <label class="block text-sm font-semibold text-gray-900 mb-1">Notes</label>
-          <p class="text-xs text-gray-500 mb-3">Private clinical notes — not visible to the client (optional)</p>
+          <label class="block text-sm font-semibold text-gray-900 mb-1">Private Notes</label>
+          <p class="text-xs text-gray-500 mb-3">Clinical notes — not visible to the client (optional)</p>
           <textarea
             v-model="notes"
             rows="3"

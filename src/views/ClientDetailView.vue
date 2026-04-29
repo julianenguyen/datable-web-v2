@@ -381,6 +381,8 @@ onMounted(async () => {
     .channel(`client-detail:${clientId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_logs', filter: `client_id=eq.${clientId}` }, () => { loadLogs() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'commitment_progress', filter: `client_id=eq.${clientId}` }, () => { loadSessionHistory() })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'session_cycles', filter: `client_id=eq.${clientId}` }, () => { loadSessionHistory() })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'session_summaries' }, () => { loadSessionHistory() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'presession_reflections', filter: `client_id=eq.${clientId}` }, () => { loadPresessionReflection() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions', filter: `client_id=eq.${clientId}` }, () => { loadSessions() })
     .subscribe()
@@ -438,7 +440,7 @@ async function loadSessionHistory() {
       id, session_date, next_session_date, status, created_at,
       checkin_lists (id, status, sent_at),
       presession_briefs (id, content, generated_at),
-      session_summaries (id, themes, strategies, commitments, watch_fors, notes, submitted_at, commitment_progress (commitment_index, status, helpfulness_rating, updated_at)),
+      session_summaries (id, title, themes, strategies, commitments, watch_fors, wins, public_notes, notes, submitted_at, commitment_progress (commitment_index, status, helpfulness_rating, updated_at)),
       presession_reflections (id, week_summary, progress, agenda, session_intent, submitted_at)
     `)
     .eq('client_id', clientId)
