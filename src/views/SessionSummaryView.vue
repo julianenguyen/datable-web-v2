@@ -211,9 +211,9 @@ async function confirmSave() {
         <!-- Commitments -->
         <div class="bg-white border border-gray-200 rounded-xl p-5">
           <label class="block text-sm font-semibold text-gray-900 mb-1">
-            Client commitments / action items <span class="text-red-500">*</span>
+            Action items <span class="text-red-500">*</span>
           </label>
-          <p class="text-xs text-gray-500 mb-3">Specific things the client agreed to do before the next session</p>
+          <p class="text-xs text-gray-500 mb-3">Suggestions that might be helpful to try before the next session</p>
 
           <div class="space-y-2">
             <div
