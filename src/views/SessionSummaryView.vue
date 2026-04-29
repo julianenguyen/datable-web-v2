@@ -136,7 +136,7 @@ async function confirmSave() {
       // Close this cycle (stamp today if no session_date) and open a fresh one
       const userId = (await supabase.auth.getUser()).data.user?.id
       const today = new Date().toISOString().split('T')[0]
-      await supabase.from('session_cycles').update({ status: 'completed', session_date: today }).eq('id', resolvedCycleId!)
+      await supabase.from('session_cycles').update({ status: 'closed', session_date: today }).eq('id', resolvedCycleId!)
       await supabase.from('session_cycles').insert({ client_id: clientId, therapist_id: userId, status: 'active' })
     }
 

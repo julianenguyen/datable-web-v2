@@ -446,7 +446,12 @@ async function loadSessionHistory() {
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
 
-  sessionHistory.value = data ?? []
+  // Sort each cycle's summaries newest-first so [0] is always the latest
+  sessionHistory.value = (data ?? []).map((cycle: Record<string, unknown>) => ({
+    ...cycle,
+    session_summaries: ((cycle.session_summaries as Record<string, unknown>[]) ?? [])
+      .sort((a, b) => new Date(b.submitted_at as string).getTime() - new Date(a.submitted_at as string).getTime()),
+  }))
 }
 
 async function loadPresessionReflection() {
