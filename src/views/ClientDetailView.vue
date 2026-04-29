@@ -1305,6 +1305,28 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                   <div>
                     <p class="text-sm font-medium text-gray-900">{{ s.title || 'Session Summary' }}</p>
                     <p class="text-xs text-gray-400 mt-0.5">{{ s.submitted_at ? new Date(s.submitted_at as string).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '' }}</p>
+                    <!-- Collapsed status pills -->
+                    <div v-if="!expandedCycles.has(s.id as string) && (s.commitments as string[])?.length" class="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      <span
+                        class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+                        :class="(s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.some(p => p.status === 'completed') ? 'bg-green-50 text-green-700' : (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.some(p => p.status === 'in_progress') ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'"
+                      >
+                        ✓ {{ (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.filter(p => p.status === 'completed').length ?? 0 }}/{{ (s.commitments as string[]).length }} done
+                      </span>
+                      <span
+                        v-if="(s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.some(p => p.helpfulness_rating != null)"
+                        class="inline-flex items-center gap-1.5 text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded-full border border-gray-200"
+                      >
+                        <span class="text-xs text-gray-400">Helpfulness</span>
+                        <span
+                          v-for="(rating, di) in (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>).filter(p => p.helpfulness_rating != null).map(p => p.helpfulness_rating)"
+                          :key="di"
+                          class="w-2 h-2 rounded-full inline-block"
+                          :class="rating === 3 ? 'bg-green-500' : rating === 1 ? 'bg-red-400' : 'bg-gray-300'"
+                        />
+                      </span>
+                      <span v-if="s.watch_fors" class="inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">👁 Watch-fors</span>
+                    </div>
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -1343,49 +1365,19 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                     <li
                       v-for="(c, ci) in (s.commitments as string[])"
                       :key="ci"
-                      class="flex items-start gap-2"
+                      class="flex items-start gap-2.5"
                     >
-                      <!-- Status icon -->
                       <span
-                        class="mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center"
+                        class="shrink-0 inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 whitespace-nowrap"
                         :class="{
-                          'bg-teal-500 border-teal-500': (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status === 'completed',
-                          'bg-yellow-400 border-yellow-400': (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status === 'in_progress',
-                          'border-gray-300': !['completed','in_progress'].includes((s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status ?? '')
+                          'bg-green-50 text-green-700': (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status === 'completed',
+                          'bg-amber-50 text-amber-700': (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status === 'in_progress',
+                          'bg-gray-100 text-gray-500': !(s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)
                         }"
                       >
-                        <svg v-if="(s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'completed'" class="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        <span v-else-if="(s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'in_progress'" class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                        {{ (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status === 'completed' ? '✓ Done' : (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.status === 'in_progress' ? '⏳ In progress' : '— Not started' }}{{ (() => { const r = (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.helpfulness_rating; return r === 3 ? ' · helpful' : r === 2 ? ' · neutral' : r === 1 ? ' · not helpful' : '' })() }}
                       </span>
-                      <!-- Text + badges -->
-                      <div class="flex-1 min-w-0">
-                        <span class="text-sm text-gray-700">{{ c }}</span>
-                        <div class="flex flex-wrap items-center gap-1.5 mt-1">
-                          <!-- Status badge -->
-                          <span
-                            v-if="(s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)"
-                            class="text-xs font-medium px-1.5 py-0.5 rounded"
-                            :class="{
-                              'bg-teal-50 text-teal-700': (s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'completed',
-                              'bg-yellow-50 text-yellow-700': (s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'in_progress',
-                              'bg-gray-100 text-gray-500': (s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status === 'not_started'
-                            }"
-                          >
-                            {{
-                              { completed: 'Completed', in_progress: 'In Progress', not_started: 'Not Started' }[
-                                ((s.commitment_progress as Array<{commitment_index: number; status: string}>)?.find(p => p.commitment_index === ci)?.status ?? 'not_started') as 'completed' | 'in_progress' | 'not_started'
-                              ]
-                            }}
-                          </span>
-                          <!-- Helpfulness badge -->
-                          <span
-                            v-if="(s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.helpfulness_rating != null"
-                            class="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700"
-                          >
-                            {{ (s.commitment_progress as Array<{commitment_index: number; status: string; helpfulness_rating: number | null}>)?.find(p => p.commitment_index === ci)?.helpfulness_rating }}/5 helpful
-                          </span>
-                        </div>
-                      </div>
+                      <span class="text-sm text-gray-800 leading-relaxed">{{ c }}</span>
                     </li>
                   </ul>
                 </div>
