@@ -931,7 +931,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                 Went well
               </span>
               <span class="flex items-center gap-1.5 text-xs text-gray-500">
-                <span class="inline-block w-2.5 h-2.5 rounded-sm bg-teal-500" />
+                <span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:#93CFCC" />
                 Weighing on you
               </span>
             </div>
@@ -944,14 +944,15 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                     :style="{ width: `${(item.wentWellCount / wheelMax) * 100}%` }"
                   />
                   <div
-                    class="h-2 bg-teal-500 transition-all duration-500"
+                    class="h-2 transition-all duration-500"
+                    style="background:#93CFCC"
                     :style="{ width: `${(item.weighingCount / wheelMax) * 100}%` }"
                   />
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
                   <span v-if="item.wentWellCount > 0" class="text-xs font-medium text-teal-600">{{ item.wentWellCount }}</span>
                   <span v-if="item.wentWellCount > 0 && item.weighingCount > 0" class="text-xs text-gray-300">·</span>
-                  <span v-if="item.weighingCount > 0" class="text-xs font-medium text-teal-500">{{ item.weighingCount }}</span>
+                  <span v-if="item.weighingCount > 0" class="text-xs font-medium" style="color:#5AADAA">{{ item.weighingCount }}</span>
                 </div>
               </div>
             </div>
