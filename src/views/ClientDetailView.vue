@@ -695,20 +695,32 @@ const allSummaries = computed(() => {
 
 // ── Wheel of Life frequency — all logs ──
 const wheelFrequency = computed(() => {
-  const counts: Record<string, number> = {}
+  const wentWell: Record<string, number> = {}
+  const weighing: Record<string, number> = {}
   for (const log of logs.value) {
-    const entries = log.wheel_of_life_entries as Array<{ category: string }> | null
+    const entries = log.wheel_of_life_entries as Array<{ category: string; question_type?: string }> | null
     if (!entries) continue
     for (const entry of entries) {
-      if (entry.category) counts[entry.category] = (counts[entry.category] ?? 0) + 1
+      if (!entry.category) continue
+      if (entry.question_type === 'weighing_on') {
+        weighing[entry.category] = (weighing[entry.category] ?? 0) + 1
+      } else {
+        wentWell[entry.category] = (wentWell[entry.category] ?? 0) + 1
+      }
     }
   }
   return Object.entries(WHEEL_OF_LIFE)
-    .map(([key, val]) => ({ key, label: val.label, count: counts[key] ?? 0 }))
-    .filter(c => c.count > 0)
-    .sort((a, b) => b.count - a.count)
+    .map(([key, val]) => ({
+      key,
+      label: val.label,
+      wentWellCount: wentWell[key] ?? 0,
+      weighingCount: weighing[key] ?? 0,
+      total: (wentWell[key] ?? 0) + (weighing[key] ?? 0),
+    }))
+    .filter(c => c.total > 0)
+    .sort((a, b) => b.total - a.total)
 })
-const wheelMax = computed(() => Math.max(...wheelFrequency.value.map(c => c.count), 1))
+const wheelMax = computed(() => Math.max(...wheelFrequency.value.map(c => c.total), 1))
 
 // ── Mood / Energy chart ──
 const hoveredLogIndex = ref<number | null>(null)
@@ -912,16 +924,36 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           <h2 class="text-sm font-semibold text-gray-900 mb-4">Focus Areas</h2>
           <p v-if="logsLoading" class="text-xs text-gray-400">Loading…</p>
           <p v-else-if="wheelFrequency.length === 0" class="text-xs text-gray-400">No categories tagged yet.</p>
-          <div v-else class="space-y-2.5">
-            <div v-for="item in wheelFrequency" :key="item.key" class="flex items-center gap-3">
-              <span class="text-xs text-gray-500 w-40 shrink-0 truncate">{{ item.label }}</span>
-              <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  class="h-2 bg-teal-500 rounded-full transition-all duration-500"
-                  :style="{ width: `${(item.count / wheelMax) * 100}%` }"
-                />
+          <div v-else>
+            <div class="flex items-center gap-4 mb-3">
+              <span class="flex items-center gap-1.5 text-xs text-gray-500">
+                <span class="inline-block w-2.5 h-2.5 rounded-sm bg-teal-600" />
+                Went well
+              </span>
+              <span class="flex items-center gap-1.5 text-xs text-gray-500">
+                <span class="inline-block w-2.5 h-2.5 rounded-sm bg-teal-500" />
+                Weighing on you
+              </span>
+            </div>
+            <div class="space-y-2.5">
+              <div v-for="item in wheelFrequency" :key="item.key" class="flex items-center gap-3">
+                <span class="text-xs text-gray-500 w-40 shrink-0 truncate">{{ item.label }}</span>
+                <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                  <div
+                    class="h-2 bg-teal-600 transition-all duration-500"
+                    :style="{ width: `${(item.wentWellCount / wheelMax) * 100}%` }"
+                  />
+                  <div
+                    class="h-2 bg-teal-500 transition-all duration-500"
+                    :style="{ width: `${(item.weighingCount / wheelMax) * 100}%` }"
+                  />
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <span v-if="item.wentWellCount > 0" class="text-xs font-medium text-teal-600">{{ item.wentWellCount }}</span>
+                  <span v-if="item.wentWellCount > 0 && item.weighingCount > 0" class="text-xs text-gray-300">·</span>
+                  <span v-if="item.weighingCount > 0" class="text-xs font-medium text-teal-500">{{ item.weighingCount }}</span>
+                </div>
               </div>
-              <span class="text-xs font-medium text-gray-400 w-5 text-right shrink-0">{{ item.count }}</span>
             </div>
           </div>
         </div>
