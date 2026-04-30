@@ -43,6 +43,7 @@ interface BriefContent {
   checkin_engagement: string
   presession_reflection: PresessionReflection
   suggested_openers: string[]
+  date_range?: { from: string; to: string }
 }
 
 interface Brief {
@@ -75,6 +76,10 @@ function formatRelative(d: string) {
   return formatDate(d)
 }
 
+function formatDateShort(d: string) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 function moodDotClass(score: number | null) {
   if (score == null) return 'bg-gray-300'
   if (score <= 3) return 'bg-red-500'
@@ -105,6 +110,11 @@ function moodDotClass(score: number | null) {
             <p class="text-xs text-gray-500 mt-0.5">
               {{ clientName }} · Generated {{ formatRelative(brief.generated_at) }}
             </p>
+            <div v-if="brief.content.date_range" class="flex items-center gap-1.5 mt-1.5">
+              <span class="text-xs text-teal-700 bg-teal-50 border border-teal-100 rounded-md px-2 py-0.5 font-medium">
+                {{ formatDateShort(brief.content.date_range.from) }} → {{ formatDateShort(brief.content.date_range.to) }}
+              </span>
+            </div>
           </div>
           <button
             @click="emit('close')"
