@@ -59,6 +59,56 @@ const drawerOpen = ref(false)
 const briefDateFrom = ref<string>('')
 const briefDateTo = ref<string>('')
 
+// Between-session time logging
+const showLogTimeModal = ref(false)
+const logTimeForm = ref({ entry_type: 'care_coordination', duration: '', date: new Date().toISOString().split('T')[0], description: '' })
+const savingLogTime = ref(false)
+const logTimeError = ref<string | null>(null)
+
+async function saveLogTime() {
+  if (!logTimeForm.value.duration || !logTimeForm.value.date) return
+  savingLogTime.value = true
+  logTimeError.value = null
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+    const entryDate = logTimeForm.value.date
+    const periodStart = entryDate.slice(0, 7) + '-01'
+    const [year, month] = entryDate.split('-').map(Number)
+    const lastDay = new Date(year, month, 0).getDate()
+    const periodEnd = `${entryDate.slice(0, 7)}-${String(lastDay).padStart(2, '0')}`
+    const { data: report } = await supabase
+      .from('ccm_reports')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('billing_period_start', periodStart)
+      .eq('status', 'draft')
+      .maybeSingle()
+    if (!report) {
+      logTimeError.value = 'No draft billing report found for that month. Generate one from the Billing tab first.'
+      return
+    }
+    const { error } = await supabase.from('ccm_time_entries').insert({
+      report_id: report.id,
+      client_id: clientId,
+      therapist_id: session.user.id,
+      entry_type: logTimeForm.value.entry_type,
+      duration_minutes: parseInt(logTimeForm.value.duration),
+      description: logTimeForm.value.description || null,
+      entry_date: entryDate,
+      source: 'manual',
+      source_record_id: null,
+    })
+    if (error) throw error
+    showLogTimeModal.value = false
+    logTimeForm.value = { entry_type: 'care_coordination', duration: '', date: new Date().toISOString().split('T')[0], description: '' }
+  } catch (e) {
+    logTimeError.value = e instanceof Error ? e.message : 'Failed to save'
+  } finally {
+    savingLogTime.value = false
+  }
+}
+
 // Past session briefs (keyed by session_id)
 interface PastSessionBrief {
   id: string
@@ -91,6 +141,7 @@ interface ScheduledSession {
   series_id: string | null
   recurrence_rule: string | null
   notes: string | null
+  duration_minutes: number | null
 }
 
 const sessions = ref<ScheduledSession[]>([])
@@ -120,7 +171,7 @@ const editingSessionId = ref<string | null>(null)
 const editingSessionSeriesId = ref<string | null>(null)
 const editingSessionRecurrence = ref<string | null>(null)
 const savingEditSession = ref(false)
-const editSessionForm = ref({ date: '', time: '' })
+const editSessionForm = ref({ date: '', time: '', duration: '' })
 
 // Calendar
 const calendarYear = ref(new Date().getFullYear())
@@ -179,7 +230,7 @@ async function loadSessions() {
   sessionsLoading.value = true
   const { data } = await supabase
     .from('sessions')
-    .select('id, session_date, session_time, status, series_id, recurrence_rule, notes')
+    .select('id, session_date, session_time, status, series_id, recurrence_rule, notes, duration_minutes')
     .eq('client_id', clientId)
     .order('session_date', { ascending: true })
   sessions.value = (data ?? []) as ScheduledSession[]
@@ -294,6 +345,7 @@ function openEditSession(s: ScheduledSession) {
   editSessionForm.value = {
     date: s.session_date,
     time: s.session_time ? s.session_time.slice(0, 5) : '',
+    duration: s.duration_minutes ? String(s.duration_minutes) : '',
   }
   showEditSessionModal.value = true
 }
@@ -305,6 +357,7 @@ async function saveEditSession() {
     const payload = {
       session_date: editSessionForm.value.date,
       session_time: editSessionForm.value.time || null,
+      duration_minutes: editSessionForm.value.duration ? parseInt(editSessionForm.value.duration) : null,
     }
 
     if (editingSessionSeriesId.value && editingSessionRecurrence.value && editingSessionRecurrence.value !== 'none') {
@@ -1165,6 +1218,21 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           </div>
         </div>
 
+        <!-- Log Between-Session Time -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div>
+            <h2 class="text-sm font-semibold text-gray-900">Between-Session Time</h2>
+            <p class="text-xs text-gray-500 mt-0.5">Log care coordination, documentation, or check-in review time for billing</p>
+          </div>
+          <button
+            @click="showLogTimeModal = true"
+            class="flex items-center gap-2 shrink-0 text-sm font-medium text-teal-600 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus class="w-4 h-4" />
+            Log Time
+          </button>
+        </div>
+
         <!-- ── ARCHIVE / RESTORE ZONE ── -->
         <div class="border rounded-xl overflow-hidden" :class="clientStatus === 'archived' ? 'border-teal-200' : 'border-gray-200'">
           <div class="px-5 py-3 border-b" :class="clientStatus === 'archived' ? 'bg-teal-50 border-teal-200' : 'bg-gray-50 border-gray-200'">
@@ -1726,6 +1794,21 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                 <input v-model="editSessionForm.time" type="time" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500" />
               </div>
 
+              <!-- Duration -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Session Duration <span class="text-xs font-normal text-gray-400">(optional)</span></label>
+                <select v-model="editSessionForm.duration" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  <option value="">Not set</option>
+                  <option value="30">30 min</option>
+                  <option value="45">45 min</option>
+                  <option value="50">50 min</option>
+                  <option value="53">53 min</option>
+                  <option value="60">60 min</option>
+                  <option value="75">75 min</option>
+                  <option value="90">90 min</option>
+                </select>
+              </div>
+
               <!-- Recurrence notice -->
               <p v-if="editingSessionRecurrence && editingSessionRecurrence !== 'none'" class="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
                 This is part of a recurring series ({{ editingSessionRecurrence }}). You'll be asked whether to update just this session or all future ones.
@@ -1742,6 +1825,63 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
                 {{ savingEditSession ? 'Saving…' : 'Save changes' }}
               </button>
               <button @click="showEditSessionModal = false" class="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
+      <!-- ── Log Between-Session Time Modal ── -->
+      <Teleport to="body">
+        <div v-if="showLogTimeModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showLogTimeModal = false">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div class="flex items-center justify-between mb-5">
+              <h2 class="text-base font-semibold text-gray-900">Log Between-Session Time</h2>
+              <button @click="showLogTimeModal = false" class="text-gray-400 hover:text-gray-600"><X class="w-5 h-5" /></button>
+            </div>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Activity Type <span class="text-red-500">*</span></label>
+                <select v-model="logTimeForm.entry_type" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  <option value="care_coordination">Care Coordination</option>
+                  <option value="documentation">Documentation</option>
+                  <option value="checkin_review">Check-In Review</option>
+                  <option value="presession_brief_review">Pre-Session Brief Review</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Duration <span class="text-red-500">*</span></label>
+                <select v-model="logTimeForm.duration" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  <option value="">Select duration</option>
+                  <option value="5">5 min</option>
+                  <option value="10">10 min</option>
+                  <option value="15">15 min</option>
+                  <option value="20">20 min</option>
+                  <option value="30">30 min</option>
+                  <option value="45">45 min</option>
+                  <option value="60">60 min</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Date <span class="text-red-500">*</span></label>
+                <input v-model="logTimeForm.date" type="date" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Notes <span class="text-xs font-normal text-gray-400">(optional)</span></label>
+                <input v-model="logTimeForm.description" type="text" placeholder="Brief description…" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+              <p v-if="logTimeError" class="text-xs text-red-500">{{ logTimeError }}</p>
+            </div>
+            <div class="flex gap-2 mt-6">
+              <button
+                @click="saveLogTime"
+                :disabled="savingLogTime || !logTimeForm.duration || !logTimeForm.date"
+                class="flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+              >
+                <span v-if="savingLogTime" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                {{ savingLogTime ? 'Saving…' : 'Save Time Entry' }}
+              </button>
+              <button @click="showLogTimeModal = false" class="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl transition-colors">Cancel</button>
             </div>
           </div>
         </div>
