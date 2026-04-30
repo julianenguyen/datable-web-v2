@@ -59,22 +59,6 @@ const drawerOpen = ref(false)
 const briefDateFrom = ref<string>('')
 const briefDateTo = ref<string>('')
 
-watch(sessions, () => {
-  const today = new Date().toISOString().split('T')[0]
-  if (!briefDateFrom.value) {
-    const lastCompleted = sessions.value
-      .filter(s => s.session_date < today && s.status !== 'cancelled')
-      .sort((a, b) => b.session_date.localeCompare(a.session_date))[0]
-    briefDateFrom.value = lastCompleted?.session_date ?? today
-  }
-  if (!briefDateTo.value) {
-    const nextScheduled = sessions.value
-      .filter(s => s.session_date >= today && s.status === 'scheduled')
-      .sort((a, b) => a.session_date.localeCompare(b.session_date))[0]
-    briefDateTo.value = nextScheduled?.session_date ?? today
-  }
-}, { immediate: true })
-
 // Past session briefs (keyed by session_id)
 interface PastSessionBrief {
   id: string
@@ -111,6 +95,22 @@ interface ScheduledSession {
 
 const sessions = ref<ScheduledSession[]>([])
 const sessionsLoading = ref(false)
+
+watch(sessions, () => {
+  const today = new Date().toISOString().split('T')[0]
+  if (!briefDateFrom.value) {
+    const lastCompleted = sessions.value
+      .filter(s => s.session_date < today && s.status !== 'cancelled')
+      .sort((a, b) => b.session_date.localeCompare(a.session_date))[0]
+    briefDateFrom.value = lastCompleted?.session_date ?? today
+  }
+  if (!briefDateTo.value) {
+    const nextScheduled = sessions.value
+      .filter(s => s.session_date >= today && s.status === 'scheduled')
+      .sort((a, b) => a.session_date.localeCompare(b.session_date))[0]
+    briefDateTo.value = nextScheduled?.session_date ?? today
+  }
+}, { immediate: true })
 const showScheduleModal = ref(false)
 const savingSession = ref(false)
 
