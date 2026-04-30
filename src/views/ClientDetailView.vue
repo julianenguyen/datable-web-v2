@@ -56,6 +56,24 @@ const generatingBrief = ref(false)
 const briefData = ref<{ id: string; content: Record<string, unknown>; generated_at: string } | null>(null)
 const briefError = ref<string | null>(null)
 const drawerOpen = ref(false)
+const briefDateFrom = ref<string>('')
+const briefDateTo = ref<string>('')
+
+watch(sessions, () => {
+  const today = new Date().toISOString().split('T')[0]
+  if (!briefDateFrom.value) {
+    const lastCompleted = sessions.value
+      .filter(s => s.session_date < today && s.status !== 'cancelled')
+      .sort((a, b) => b.session_date.localeCompare(a.session_date))[0]
+    briefDateFrom.value = lastCompleted?.session_date ?? today
+  }
+  if (!briefDateTo.value) {
+    const nextScheduled = sessions.value
+      .filter(s => s.session_date >= today && s.status === 'scheduled')
+      .sort((a, b) => a.session_date.localeCompare(b.session_date))[0]
+    briefDateTo.value = nextScheduled?.session_date ?? today
+  }
+}, { immediate: true })
 
 // Past session briefs (keyed by session_id)
 interface PastSessionBrief {
@@ -613,7 +631,7 @@ async function generateBrief(cycleId: string) {
       .sort((a, b) => a.session_date.localeCompare(b.session_date))[0] ?? null
 
     const { data, error } = await supabase.functions.invoke('generate-presession-brief', {
-      body: { clientId, cycleId, sessionId: nextSession?.id ?? null },
+      body: { clientId, cycleId, sessionId: nextSession?.id ?? null, dateFrom: briefDateFrom.value || undefined, dateTo: briefDateTo.value || undefined },
     })
     if (error) {
       // Extract the actual error body from the edge function response
@@ -1098,33 +1116,53 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         </div>
 
         <!-- Generate brief -->
-        <div class="bg-white border border-gray-200 rounded-xl p-5">
-          <div class="flex items-center justify-between gap-4">
+        <div class="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <div class="flex items-start justify-between gap-4">
             <div>
               <h2 class="text-sm font-semibold text-gray-900">Pre-Session Brief</h2>
-              <p class="text-xs text-gray-500 mt-0.5">AI-generated summary to prepare for your next session</p>
+              <p class="text-xs text-gray-500 mt-0.5">AI-generated summary of logged data between sessions</p>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <button
-                v-if="briefData"
-                @click="drawerOpen = true"
-                class="text-sm font-medium text-teal-600 hover:text-teal-700 px-3 py-2 rounded-lg hover:bg-teal-50 transition-colors"
-              >
-                View Brief
-              </button>
-              <button
-                @click="activeCycle && generateBrief(activeCycle.id as string)"
-                :disabled="generatingBrief || !activeCycle"
-                class="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-              >
-                <span v-if="generatingBrief" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                <RotateCcw v-else-if="briefData" class="w-4 h-4" />
-                <Sparkles v-else class="w-4 h-4" />
-                {{ generatingBrief ? 'Generating…' : briefData ? 'Regenerate Brief' : 'Generate Pre-Session Brief' }}
-              </button>
+            <button
+              v-if="briefData"
+              @click="drawerOpen = true"
+              class="text-sm font-medium text-teal-600 hover:text-teal-700 px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors shrink-0"
+            >
+              View Brief
+            </button>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-500 shrink-0">From</label>
+              <input
+                type="date"
+                v-model="briefDateFrom"
+                class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              />
+            </div>
+            <span class="text-gray-300 text-sm">→</span>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-500 shrink-0">To</label>
+              <input
+                type="date"
+                v-model="briefDateTo"
+                class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              />
             </div>
           </div>
-          <p v-if="briefError" class="text-xs text-red-500 mt-2">{{ briefError }}</p>
+          <div class="flex items-center justify-between">
+            <p v-if="briefError" class="text-xs text-red-500">{{ briefError }}</p>
+            <span v-else />
+            <button
+              @click="activeCycle && generateBrief(activeCycle.id as string)"
+              :disabled="generatingBrief || !activeCycle || !briefDateFrom || !briefDateTo"
+              class="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <span v-if="generatingBrief" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              <RotateCcw v-else-if="briefData" class="w-4 h-4" />
+              <Sparkles v-else class="w-4 h-4" />
+              {{ generatingBrief ? 'Generating…' : briefData ? 'Regenerate Brief' : 'Generate Pre-Session Brief' }}
+            </button>
+          </div>
         </div>
 
         <!-- ── ARCHIVE / RESTORE ZONE ── -->
