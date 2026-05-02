@@ -230,7 +230,7 @@ async function loadSessions() {
   sessionsLoading.value = true
   const { data } = await supabase
     .from('sessions')
-    .select('id, session_date, session_time, status, series_id, recurrence_rule, notes')
+    .select('id, session_date, session_time, status, series_id, recurrence_rule, notes, duration_minutes')
     .eq('client_id', clientId)
     .order('session_date', { ascending: true })
   sessions.value = (data ?? []) as ScheduledSession[]
