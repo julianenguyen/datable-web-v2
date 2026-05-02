@@ -141,7 +141,7 @@ interface ScheduledSession {
   series_id: string | null
   recurrence_rule: string | null
   notes: string | null
-  duration_minutes: number | null
+  duration_minutes?: number | null
 }
 
 const sessions = ref<ScheduledSession[]>([])
@@ -230,7 +230,7 @@ async function loadSessions() {
   sessionsLoading.value = true
   const { data } = await supabase
     .from('sessions')
-    .select('id, session_date, session_time, status, series_id, recurrence_rule, notes, duration_minutes')
+    .select('id, session_date, session_time, status, series_id, recurrence_rule, notes')
     .eq('client_id', clientId)
     .order('session_date', { ascending: true })
   sessions.value = (data ?? []) as ScheduledSession[]
