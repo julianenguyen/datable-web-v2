@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
-import { LogOut, LayoutDashboard, Settings } from 'lucide-vue-next'
+import { LogOut, LayoutDashboard } from 'lucide-vue-next'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -33,24 +33,23 @@ async function handleSignOut() {
           <LayoutDashboard class="w-4 h-4 shrink-0" />
           Client Roster
         </router-link>
-        <router-link
-          to="/settings"
-          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-          :class="$route.path === '/settings'
-            ? 'bg-teal-50 text-teal-700'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
-        >
-          <Settings class="w-4 h-4 shrink-0" />
-          Settings
-        </router-link>
       </nav>
 
       <!-- Footer -->
       <div class="px-3 py-4 border-t border-gray-100">
-        <div class="px-3 py-2 mb-1">
-          <p class="text-xs font-medium text-gray-900 truncate">{{ auth.profile?.name || (auth.user?.user_metadata?.name as string) || auth.user?.email }}</p>
-          <p class="text-xs text-gray-500 truncate">{{ ('practice_name' in (auth.profile ?? {})) ? (auth.profile as { practice_name: string | null }).practice_name ?? 'Provider' : 'Provider' }}</p>
-        </div>
+        <router-link
+          to="/settings"
+          class="flex items-center gap-2.5 px-3 py-2 rounded-lg mb-1 transition-colors hover:bg-gray-50 group"
+          :class="$route.path === '/settings' ? 'bg-teal-50' : ''"
+        >
+          <div class="w-7 h-7 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-semibold shrink-0">
+            {{ (auth.profile?.name || (auth.user?.user_metadata?.name as string) || auth.user?.email || '?')[0].toUpperCase() }}
+          </div>
+          <div class="min-w-0">
+            <p class="text-xs font-medium text-gray-900 truncate group-hover:text-teal-700 transition-colors">{{ auth.profile?.name || (auth.user?.user_metadata?.name as string) || auth.user?.email }}</p>
+            <p class="text-xs text-gray-400 truncate">{{ ('practice_name' in (auth.profile ?? {})) ? (auth.profile as { practice_name: string | null }).practice_name ?? 'Provider' : 'Provider' }}</p>
+          </div>
+        </router-link>
         <button
           @click="handleSignOut"
           class="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors"
