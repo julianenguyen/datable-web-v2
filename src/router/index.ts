@@ -135,9 +135,22 @@ router.beforeEach(async (to) => {
       await onboarding.loadProgress(auth.user!.id)
     }
     if (onboarding.isComplete) return { name: 'dashboard' }
-    // Enforce linear order: redirect to first incomplete step
+
+    const stepOrder = [
+      '/onboarding/practice',
+      '/onboarding/clinician',
+      '/onboarding/insurance',
+      '/onboarding/baa',
+      '/onboarding/billing',
+      '/onboarding/welcome',
+    ]
     const correctStep = onboarding.currentStepRoute
-    if (correctStep !== to.path && correctStep !== '/') {
+    const targetIndex = stepOrder.indexOf(to.path)
+    const correctIndex = stepOrder.indexOf(correctStep)
+
+    // Allow backward navigation to any completed step.
+    // Only block skipping ahead past the first incomplete step.
+    if (targetIndex > correctIndex) {
       return { path: correctStep }
     }
     return
