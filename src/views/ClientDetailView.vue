@@ -1169,53 +1169,50 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         </div>
 
         <!-- Generate brief -->
-        <div class="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <div class="flex items-start justify-between gap-4">
-            <div>
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <div class="flex items-center justify-between gap-4 flex-wrap gap-y-3">
+            <div class="min-w-0">
               <h2 class="text-sm font-semibold text-gray-900">Pre-Session Brief</h2>
               <p class="text-xs text-gray-500 mt-0.5">AI-generated summary of logged data between sessions</p>
             </div>
-            <button
-              v-if="briefData"
-              @click="drawerOpen = true"
-              class="text-sm font-medium text-teal-600 hover:text-teal-700 px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors shrink-0"
-            >
-              View Brief
-            </button>
-          </div>
-          <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2">
-              <label class="text-xs text-gray-500 shrink-0">From</label>
-              <input
-                type="date"
-                v-model="briefDateFrom"
-                class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
+            <div class="flex items-center gap-3 flex-wrap shrink-0">
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-gray-500 shrink-0">From</label>
+                <input
+                  type="date"
+                  v-model="briefDateFrom"
+                  class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+              <span class="text-gray-300 text-sm">→</span>
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-gray-500 shrink-0">To</label>
+                <input
+                  type="date"
+                  v-model="briefDateTo"
+                  class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+              <button
+                v-if="briefData"
+                @click="drawerOpen = true"
+                class="text-sm font-medium text-teal-600 hover:text-teal-700 px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors"
+              >
+                View Brief
+              </button>
+              <button
+                @click="activeCycle && generateBrief(activeCycle.id as string)"
+                :disabled="generatingBrief || !activeCycle || !briefDateFrom || !briefDateTo"
+                class="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                <span v-if="generatingBrief" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <RotateCcw v-else-if="briefData" class="w-4 h-4" />
+                <Sparkles v-else class="w-4 h-4" />
+                {{ generatingBrief ? 'Generating…' : briefData ? 'Regenerate Brief' : 'Generate Pre-Session Brief' }}
+              </button>
             </div>
-            <span class="text-gray-300 text-sm">→</span>
-            <div class="flex items-center gap-2">
-              <label class="text-xs text-gray-500 shrink-0">To</label>
-              <input
-                type="date"
-                v-model="briefDateTo"
-                class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
-            </div>
           </div>
-          <div class="flex items-center justify-between">
-            <p v-if="briefError" class="text-xs text-red-500">{{ briefError }}</p>
-            <span v-else />
-            <button
-              @click="activeCycle && generateBrief(activeCycle.id as string)"
-              :disabled="generatingBrief || !activeCycle || !briefDateFrom || !briefDateTo"
-              class="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
-              <span v-if="generatingBrief" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              <RotateCcw v-else-if="briefData" class="w-4 h-4" />
-              <Sparkles v-else class="w-4 h-4" />
-              {{ generatingBrief ? 'Generating…' : briefData ? 'Regenerate Brief' : 'Generate Pre-Session Brief' }}
-            </button>
-          </div>
+          <p v-if="briefError" class="text-xs text-red-500 mt-2">{{ briefError }}</p>
         </div>
 
         <!-- Log Between-Session Time -->
