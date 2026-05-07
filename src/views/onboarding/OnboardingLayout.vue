@@ -1,11 +1,33 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
+
 defineProps<{
   currentStep: number
   title: string
   subtitle?: string
 }>()
 
+const router = useRouter()
+
 const stepLabels = ['Account', 'Practice', 'Clinician', 'Insurance', 'BAA', 'Billing', 'Welcome']
+
+const stepRoutes: (string | null)[] = [
+  null, // Step 1: Account — no route, already created
+  '/onboarding/practice',
+  '/onboarding/clinician',
+  '/onboarding/insurance',
+  '/onboarding/baa',
+  '/onboarding/billing',
+  '/onboarding/welcome',
+]
+
+function navigateToStep(index: number, currentStep: number) {
+  const route = stepRoutes[index]
+  // Only navigate to completed steps or current step, not future steps
+  if (route && index + 1 <= currentStep) {
+    router.push(route)
+  }
+}
 </script>
 
 <template>
@@ -22,9 +44,11 @@ const stepLabels = ['Account', 'Practice', 'Clinician', 'Insurance', 'BAA', 'Bil
             class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all"
             :class="{
               'bg-teal-600 text-white': index + 1 === currentStep,
-              'bg-gray-400 text-white': index + 1 < currentStep,
-              'border-2 border-gray-300 text-gray-400 bg-white': index + 1 > currentStep,
+              'bg-gray-400 text-white hover:bg-teal-700 cursor-pointer': index + 1 < currentStep && stepRoutes[index] !== null,
+              'bg-gray-300 text-white cursor-not-allowed': index + 1 < currentStep && stepRoutes[index] === null,
+              'border-2 border-gray-300 text-gray-400 bg-white cursor-not-allowed': index + 1 > currentStep,
             }"
+            @click="navigateToStep(index, currentStep)"
           >
             <!-- Completed: checkmark -->
             <svg
