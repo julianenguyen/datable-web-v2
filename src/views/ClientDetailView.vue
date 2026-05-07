@@ -10,6 +10,7 @@ import PresessionBriefDrawer from '@/components/PresessionBriefDrawer.vue'
 import AwardMilestoneDrawer from '@/components/AwardMilestoneDrawer.vue'
 import ClientMilestonesTab from '@/components/ClientMilestonesTab.vue'
 import BillingTab from '@/components/BillingTab.vue'
+import ConsentPanel from '@/components/ConsentPanel.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -1760,6 +1761,12 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
             </div>
           </div>
         </div>
+
+        <!-- Billing enrollment consent -->
+        <ConsentPanel
+          :client-id="clientId"
+          :client-name="clientName"
+        />
 
         <!-- Report list -->
         <BillingTab

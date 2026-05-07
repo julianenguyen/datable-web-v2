@@ -8,6 +8,10 @@ export type PhiRecordType =
   | 'checkin_response'
   | 'client_profile'
   | 'session_summary'
+  | 'billing_consent_sent'
+  | 'billing_consent_status_read'
+  | 'billing_consent_full_record_read'
+  | 'billing_consent_disenrolled'
 
 export type AuditAction = 'read' | 'write' | 'delete'
 
