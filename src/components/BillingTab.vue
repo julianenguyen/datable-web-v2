@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { FileText, AlertTriangle, Download, CheckCircle2 } from 'lucide-vue-next'
+import { FileText, AlertTriangle, Download, CheckCircle2, Trash2 } from 'lucide-vue-next'
 import { supabase, supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
 import ReportDetailDrawer from '@/components/ReportDetailDrawer.vue'
 
@@ -32,6 +32,8 @@ const generatingReportId = ref<string | null>(null)
 const downloadingPdf = ref<string | null>(null)
 const downloadingExcel = ref<string | null>(null)
 const generatingManual = ref(false)
+const deletingReportId = ref<string | null>(null)
+const confirmDeleteId = ref<string | null>(null)
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
@@ -101,6 +103,24 @@ async function downloadFile(reportId: string, type: 'pdf' | 'excel') {
 function openDrawer(reportId: string) {
   selectedReportId.value = reportId
   isDrawerOpen.value = true
+}
+
+async function deleteDraft(reportId: string) {
+  deletingReportId.value = reportId
+  try {
+    const { error: err } = await supabase
+      .from('ccm_reports')
+      .delete()
+      .eq('id', reportId)
+      .eq('status', 'draft')
+    if (err) throw err
+    reports.value = reports.value.filter(r => r.id !== reportId)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to delete report'
+  } finally {
+    deletingReportId.value = null
+    confirmDeleteId.value = null
+  }
 }
 
 function onReportFinalized(reportId: string) {
@@ -237,6 +257,34 @@ onMounted(loadReports)
               <Download class="w-3 h-3" />
               {{ downloadingExcel === report.id ? 'Generating…' : 'Excel' }}
             </button>
+
+            <!-- Delete draft -->
+            <template v-if="report.status === 'draft'">
+              <template v-if="confirmDeleteId === report.id">
+                <span class="text-xs text-gray-500 ml-1">Delete this draft?</span>
+                <button
+                  @click="deleteDraft(report.id)"
+                  :disabled="deletingReportId === report.id"
+                  class="text-xs font-medium text-red-600 hover:text-red-700 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-60"
+                >
+                  {{ deletingReportId === report.id ? 'Deleting…' : 'Yes, delete' }}
+                </button>
+                <button
+                  @click="confirmDeleteId = null"
+                  class="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </template>
+              <button
+                v-else
+                @click="confirmDeleteId = report.id"
+                class="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors ml-auto"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+                Delete
+              </button>
+            </template>
           </div>
         </div>
 
