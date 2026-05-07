@@ -30,9 +30,8 @@ async function handleSignIn() {
     <div class="w-full max-w-sm">
       <!-- Logo -->
       <div class="text-center mb-8">
-        <img src="/logo-teal.png" alt="Datable Health" class="h-9 mx-auto mb-4" />
-        <h1 class="text-xl font-semibold text-gray-900">Datable Health</h1>
-        <p class="text-sm text-gray-500 mt-1">Provider portal</p>
+        <img src="/logo-teal.png" alt="Datable Health" class="h-9 mx-auto mb-3" />
+        <p class="text-sm text-gray-500">Provider portal</p>
       </div>
 
       <!-- Card -->
