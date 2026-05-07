@@ -23,6 +23,7 @@ function showSuccess(msg: string) {
 // ─── Account tab ───────────────────────────────────────────────────────────────
 const accountName = ref('')
 const accountEmail = ref('')
+const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 
@@ -42,12 +43,25 @@ async function saveAccount() {
       updates.email = accountEmail.value.trim()
     }
     if (newPassword.value) {
+      if (!currentPassword.value) {
+        errorMessage.value = 'Please enter your current password.'
+        return
+      }
       if (newPassword.value !== confirmPassword.value) {
         errorMessage.value = 'Passwords do not match.'
         return
       }
       if (newPassword.value.length < 8) {
-        errorMessage.value = 'Password must be at least 8 characters.'
+        errorMessage.value = 'New password must be at least 8 characters.'
+        return
+      }
+      // Verify current password before allowing the change
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: auth.user!.email!,
+        password: currentPassword.value,
+      })
+      if (reauthError) {
+        errorMessage.value = 'Current password is incorrect.'
         return
       }
       updates.password = newPassword.value
@@ -65,6 +79,7 @@ async function saveAccount() {
     }
 
     await auth.loadProfile(auth.user!.id)
+    currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
     showSuccess('Account updated.')
@@ -546,11 +561,22 @@ onMounted(async () => {
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
           <h3 class="text-sm font-semibold text-gray-700">Change password</h3>
           <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Current password</label>
+            <input
+              v-model="currentPassword"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Enter your current password"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-gray-400"
+            />
+          </div>
+          <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">New password</label>
             <input
               v-model="newPassword"
               type="password"
-              placeholder="Leave blank to keep current password"
+              autocomplete="new-password"
+              placeholder="At least 8 characters"
               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-gray-400"
             />
           </div>
@@ -559,6 +585,7 @@ onMounted(async () => {
             <input
               v-model="confirmPassword"
               type="password"
+              autocomplete="new-password"
               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
