@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
-import { LogOut, Users, LayoutDashboard } from 'lucide-vue-next'
+import { LogOut, LayoutDashboard, Settings } from 'lucide-vue-next'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -33,12 +33,22 @@ async function handleSignOut() {
           <LayoutDashboard class="w-4 h-4 shrink-0" />
           Client Roster
         </router-link>
+        <router-link
+          to="/settings"
+          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+          :class="$route.path === '/settings'
+            ? 'bg-teal-50 text-teal-700'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+        >
+          <Settings class="w-4 h-4 shrink-0" />
+          Settings
+        </router-link>
       </nav>
 
       <!-- Footer -->
       <div class="px-3 py-4 border-t border-gray-100">
         <div class="px-3 py-2 mb-1">
-          <p class="text-xs font-medium text-gray-900 truncate">{{ auth.profile?.name ?? auth.user?.email }}</p>
+          <p class="text-xs font-medium text-gray-900 truncate">{{ auth.profile?.name || (auth.user?.user_metadata?.name as string) || auth.user?.email }}</p>
           <p class="text-xs text-gray-500 truncate">{{ ('practice_name' in (auth.profile ?? {})) ? (auth.profile as { practice_name: string | null }).practice_name ?? 'Provider' : 'Provider' }}</p>
         </div>
         <button

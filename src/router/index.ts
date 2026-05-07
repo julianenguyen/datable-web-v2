@@ -106,6 +106,11 @@ const router = createRouter({
       name: 'invite-client',
       component: () => import('@/views/InviteClientView.vue'),
     },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/SettingsView.vue'),
+    },
   ],
 })
 
