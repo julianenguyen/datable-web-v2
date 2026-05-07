@@ -8,6 +8,7 @@ const auth = useAuthStore()
 
 type Tab = 'account' | 'practice' | 'clinician' | 'insurance'
 const activeTab = ref<Tab>('account')
+const isLegacyAccount = ref(false)
 
 const successMessage = ref('')
 const errorMessage = ref('')
@@ -54,9 +55,13 @@ async function saveAccount() {
     const { error } = await supabase.auth.updateUser(updates)
     if (error) throw error
 
-    // Also update clinicians table name
+    // Also update name in whichever table this account lives in
     if (auth.user) {
-      await supabase.from('clinicians').update({ name: accountName.value.trim() }).eq('id', auth.user.id)
+      if (isLegacyAccount.value) {
+        await supabase.from('therapists').update({ name: accountName.value.trim() }).eq('id', auth.user.id)
+      } else {
+        await supabase.from('clinicians').update({ name: accountName.value.trim() }).eq('id', auth.user.id)
+      }
     }
 
     await auth.loadProfile(auth.user!.id)
@@ -124,26 +129,42 @@ function onTaxIdInput(e: Event) {
 
 async function loadPractice() {
   if (!auth.user) return
-  const { data } = await supabase
+
+  // Try clinicians table first (new accounts)
+  const { data: clinician } = await supabase
     .from('clinicians')
     .select('practice_id')
     .eq('id', auth.user.id)
     .maybeSingle()
-  if (!data?.practice_id) return
-  practiceId.value = data.practice_id
 
-  const { data: p } = await supabase.from('practices').select('*').eq('id', data.practice_id).single()
-  if (!p) return
-  practiceName.value = p.name ?? ''
-  practiceType.value = p.practice_type ?? 'solo'
-  addressStreet.value = p.address_street ?? ''
-  addressCity.value = p.address_city ?? ''
-  addressState.value = p.address_state ?? ''
-  addressZip.value = p.address_zip ?? ''
-  phone.value = p.phone ?? ''
-  groupNpi.value = p.group_npi ?? ''
-  taxId.value = p.tax_id ?? ''
-  website.value = p.website ?? ''
+  if (clinician?.practice_id) {
+    practiceId.value = clinician.practice_id
+    const { data: p } = await supabase.from('practices').select('*').eq('id', clinician.practice_id).single()
+    if (!p) return
+    practiceName.value = p.name ?? ''
+    practiceType.value = p.practice_type ?? 'solo'
+    addressStreet.value = p.address_street ?? ''
+    addressCity.value = p.address_city ?? ''
+    addressState.value = p.address_state ?? ''
+    addressZip.value = p.address_zip ?? ''
+    phone.value = p.phone ?? ''
+    groupNpi.value = p.group_npi ?? ''
+    taxId.value = p.tax_id ?? ''
+    website.value = p.website ?? ''
+    return
+  }
+
+  // Fall back to therapists table (legacy accounts)
+  const { data: therapist } = await supabase
+    .from('therapists')
+    .select('name, practice_name, license_type')
+    .eq('id', auth.user.id)
+    .maybeSingle()
+
+  if (therapist) {
+    isLegacyAccount.value = true
+    practiceName.value = therapist.practice_name ?? ''
+  }
 }
 
 const practiceValid = computed(() => {
@@ -161,6 +182,22 @@ const practiceValid = computed(() => {
 })
 
 async function savePractice() {
+  if (isLegacyAccount.value) {
+    if (!practiceName.value.trim() || !auth.user) return
+    errorMessage.value = ''
+    loading.value = true
+    try {
+      const { error } = await supabase.from('therapists').update({ practice_name: practiceName.value.trim() }).eq('id', auth.user.id)
+      if (error) throw error
+      await auth.loadProfile(auth.user.id)
+      showSuccess('Practice name updated.')
+    } catch (e: unknown) {
+      errorMessage.value = (e as { message?: string })?.message ?? 'Failed to update.'
+    } finally {
+      loading.value = false
+    }
+    return
+  }
   if (!practiceValid.value || !practiceId.value) return
   errorMessage.value = ''
   loading.value = true
@@ -250,6 +287,15 @@ function onNpiBlur() {
 
 async function loadClinician() {
   if (!auth.user) return
+  if (isLegacyAccount.value) {
+    const { data } = await supabase
+      .from('therapists')
+      .select('license_type')
+      .eq('id', auth.user.id)
+      .maybeSingle()
+    if (data) licenseType.value = data.license_type ?? ''
+    return
+  }
   const { data } = await supabase
     .from('clinicians')
     .select('individual_npi, license_type, license_state, license_number, years_in_practice')
@@ -277,6 +323,21 @@ const clinicianValid = computed(() => {
 })
 
 async function saveClinician() {
+  if (isLegacyAccount.value) {
+    if (!licenseType.value || !auth.user) return
+    errorMessage.value = ''
+    loading.value = true
+    try {
+      const { error } = await supabase.from('therapists').update({ license_type: licenseType.value }).eq('id', auth.user.id)
+      if (error) throw error
+      showSuccess('License type updated.')
+    } catch (e: unknown) {
+      errorMessage.value = (e as { message?: string })?.message ?? 'Failed to update.'
+    } finally {
+      loading.value = false
+    }
+    return
+  }
   if (!clinicianValid.value || !auth.user) return
   errorMessage.value = ''
   loading.value = true
@@ -514,7 +575,20 @@ onMounted(async () => {
 
       <!-- ── Practice tab ── -->
       <div v-if="activeTab === 'practice'" class="space-y-6">
-        <div v-if="!practiceId" class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+        <!-- Legacy account: only practice name is stored -->
+        <template v-if="isLegacyAccount">
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">Practice name</label>
+              <input v-model="practiceName" type="text" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" />
+            </div>
+          </div>
+          <button @click="savePractice" :disabled="loading"
+            class="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
+            {{ loading ? 'Saving…' : 'Save changes' }}
+          </button>
+        </template>
+        <div v-else-if="!practiceId" class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
           No practice profile found. Please complete onboarding first.
         </div>
         <template v-else>
@@ -593,6 +667,21 @@ onMounted(async () => {
 
       <!-- ── Clinician tab ── -->
       <div v-if="activeTab === 'clinician'" class="space-y-6">
+        <!-- Legacy: only license type is stored -->
+        <template v-if="isLegacyAccount">
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">License type</label>
+            <select v-model="licenseType" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
+              <option value="" disabled>Select license type</option>
+              <option v-for="lt in LICENSE_TYPES" :key="lt.value" :value="lt.value">{{ lt.label }}</option>
+            </select>
+          </div>
+          <button @click="saveClinician" :disabled="!licenseType || loading"
+            class="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
+            {{ loading ? 'Saving…' : 'Save changes' }}
+          </button>
+        </template>
+        <template v-else>
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Individual NPI <span class="text-gray-400 font-normal">(Type 1)</span></label>
@@ -654,10 +743,15 @@ onMounted(async () => {
           class="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
           {{ loading ? 'Saving…' : 'Save changes' }}
         </button>
+        </template>
       </div>
 
       <!-- ── Insurance tab ── -->
       <div v-if="activeTab === 'insurance'" class="space-y-6">
+        <div v-if="isLegacyAccount" class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+          Insurance settings are not available for your account type.
+        </div>
+        <template v-else>
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
           <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Practice model</h3>
           <div class="grid grid-cols-1 gap-2">
@@ -730,6 +824,7 @@ onMounted(async () => {
           class="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
           {{ loading ? 'Saving…' : 'Save changes' }}
         </button>
+        </template>
       </div>
     </div>
   </AppLayout>
