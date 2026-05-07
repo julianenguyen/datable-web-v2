@@ -21,12 +21,9 @@ const stepRoutes: (string | null)[] = [
   '/onboarding/welcome',
 ]
 
-function navigateToStep(index: number, currentStep: number) {
+function navigateToStep(index: number) {
   const route = stepRoutes[index]
-  // Only navigate to completed steps or current step, not future steps
-  if (route && index + 1 <= currentStep) {
-    router.push(route)
-  }
+  if (route) router.push(route)
 }
 </script>
 
@@ -41,14 +38,13 @@ function navigateToStep(index: number, currentStep: number) {
         <div class="flex flex-col items-center">
           <!-- Dot -->
           <div
-            class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all"
+            class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all cursor-pointer"
             :class="{
               'bg-teal-600 text-white': index + 1 === currentStep,
-              'bg-gray-400 text-white hover:bg-teal-700 cursor-pointer': index + 1 < currentStep && stepRoutes[index] !== null,
-              'bg-gray-300 text-white cursor-not-allowed': index + 1 < currentStep && stepRoutes[index] === null,
-              'border-2 border-gray-300 text-gray-400 bg-white cursor-not-allowed': index + 1 > currentStep,
+              'bg-gray-400 text-white hover:bg-teal-700': index + 1 < currentStep,
+              'border-2 border-gray-300 text-gray-400 bg-white hover:border-teal-400 hover:text-teal-500': index + 1 > currentStep,
             }"
-            @click="navigateToStep(index, currentStep)"
+            @click="navigateToStep(index)"
           >
             <!-- Completed: checkmark -->
             <svg

@@ -142,24 +142,7 @@ router.beforeEach(async (to) => {
     }
     if (onboarding.isComplete) return { name: 'dashboard' }
 
-    const stepOrder = [
-      '/onboarding/account',
-      '/onboarding/practice',
-      '/onboarding/clinician',
-      '/onboarding/insurance',
-      '/onboarding/baa',
-      '/onboarding/billing',
-      '/onboarding/welcome',
-    ]
-    const correctStep = onboarding.currentStepRoute
-    const targetIndex = stepOrder.indexOf(to.path)
-    const correctIndex = stepOrder.indexOf(correctStep)
-
-    // Allow backward navigation to any completed step.
-    // Only block skipping ahead past the first incomplete step.
-    if (targetIndex > correctIndex) {
-      return { path: correctStep }
-    }
+    // Allow free navigation between any onboarding steps
     return
   }
 
