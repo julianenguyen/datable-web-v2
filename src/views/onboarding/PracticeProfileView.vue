@@ -140,12 +140,15 @@ async function handleContinue() {
     subtitle="Tell us about your practice. This information is used for billing and HIPAA compliance."
   >
     <template #back>
-      <div class="inline-flex items-center gap-1.5 text-sm text-gray-300 mb-5 -mt-1 cursor-not-allowed select-none">
+      <router-link
+        to="/onboarding/account"
+        class="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 mb-5 -mt-1"
+      >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        Account created ✓
-      </div>
+        Back
+      </router-link>
     </template>
 
     <form @submit.prevent="handleContinue" class="space-y-6" novalidate>

@@ -33,6 +33,12 @@ const router = createRouter({
 
     // Onboarding (authenticated but incomplete)
     {
+      path: '/onboarding/account',
+      name: 'onboarding-account',
+      component: () => import('@/views/onboarding/AccountView.vue'),
+      meta: { onboarding: true },
+    },
+    {
       path: '/onboarding/practice',
       name: 'onboarding-practice',
       component: () => import('@/views/onboarding/PracticeProfileView.vue'),
@@ -137,6 +143,7 @@ router.beforeEach(async (to) => {
     if (onboarding.isComplete) return { name: 'dashboard' }
 
     const stepOrder = [
+      '/onboarding/account',
       '/onboarding/practice',
       '/onboarding/clinician',
       '/onboarding/insurance',

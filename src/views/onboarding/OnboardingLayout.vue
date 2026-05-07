@@ -12,7 +12,7 @@ const router = useRouter()
 const stepLabels = ['Account', 'Practice', 'Clinician', 'Insurance', 'BAA', 'Billing', 'Welcome']
 
 const stepRoutes: (string | null)[] = [
-  null, // Step 1: Account — no route, already created
+  '/onboarding/account',
   '/onboarding/practice',
   '/onboarding/clinician',
   '/onboarding/insurance',
