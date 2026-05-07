@@ -71,68 +71,16 @@ async function handleSkip() {
     </template>
 
     <div class="space-y-5">
-      <!-- Stripe not configured banner -->
-      <div class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-        <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-        </svg>
-        <p class="text-xs text-amber-700 leading-relaxed">
-          Payment processing requires Stripe setup. Add <code class="font-mono bg-amber-100 px-1 rounded">VITE_STRIPE_PUBLISHABLE_KEY</code> to your <code class="font-mono bg-amber-100 px-1 rounded">.env</code> file to enable card collection.
-        </p>
-      </div>
-
-      <!-- Two-column layout -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <!-- Left: Payment form (placeholder) -->
-        <div class="space-y-4">
+      <!-- Plan summary (full width when Stripe not configured) -->
+      <div :class="stripeConfigured ? 'grid grid-cols-1 md:grid-cols-2 gap-5' : ''">
+        <!-- Stripe payment form (only when configured) -->
+        <div v-if="stripeConfigured" class="space-y-4">
           <h3 class="text-sm font-semibold text-gray-800">Payment details</h3>
           <p class="text-xs text-gray-500">Payment processing via Stripe — enter your card details below</p>
-
-          <div class="space-y-3 opacity-50 pointer-events-none select-none">
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Card number</label>
-              <div class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-400">
-                •••• •••• •••• ••••
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Expiry</label>
-                <div class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-400">
-                  MM / YY
-                </div>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">CVC</label>
-                <div class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-400">
-                  •••
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Billing ZIP</label>
-              <div class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-400">
-                •••••
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            disabled
-            class="w-full bg-teal-600 opacity-40 cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-lg"
-          >
-            Start Free Trial
-          </button>
-
-          <p class="text-xs text-gray-400 text-center">
-            Add <code class="font-mono">VITE_STRIPE_PUBLISHABLE_KEY</code> to enable payments
-          </p>
+          <!-- Stripe Elements mount point would go here -->
         </div>
 
-        <!-- Right: Plan summary -->
+        <!-- Plan summary -->
         <div class="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
           <div>
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Plan summary</p>
@@ -199,21 +147,21 @@ async function handleSkip() {
         {{ error }}
       </div>
 
-      <!-- Dev mode skip -->
+      <!-- Start trial CTA -->
       <div class="border-t border-gray-100 pt-4">
         <button
           @click="handleSkip"
           :disabled="loading"
-          class="w-full border-2 border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-600 text-sm font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
         >
           <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          {{ loading ? 'Activating trial…' : 'Skip billing for now (dev mode)' }}
+          {{ loading ? 'Activating your trial…' : 'Start Free Trial →' }}
         </button>
         <p class="text-center text-xs text-gray-400 mt-2">
-          Trial is activated automatically. Stripe required before going live.
+          No credit card required today. You'll be charged $149/month after your trial ends.
         </p>
       </div>
     </div>
