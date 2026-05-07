@@ -17,6 +17,7 @@ export interface ClinicianProfile {
   name: string
   email: string
   practice_id: string
+  practice_name: string | null
   role: string
   license_type: string
   license_state: string
@@ -35,12 +36,15 @@ export const useAuthStore = defineStore('auth', () => {
     // Try clinicians table first (new provider accounts)
     const { data: clinicianData } = await supabase
       .from('clinicians')
-      .select('*')
+      .select('*, practices(name)')
       .eq('id', userId)
       .maybeSingle()
 
     if (clinicianData) {
-      profile.value = clinicianData as ClinicianProfile
+      profile.value = {
+        ...clinicianData,
+        practice_name: (clinicianData.practices as { name?: string } | null)?.name ?? null,
+      } as ClinicianProfile
       profileReady.value = true
       return
     }
