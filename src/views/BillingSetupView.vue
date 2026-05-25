@@ -252,16 +252,21 @@ async function handleDeletePayer(index: number) {
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData.session?.access_token ?? ''
 
-    await fetch(`${EDGE_FUNCTION_URL}/credentials/payer/${payer.id}`, {
+    const res = await fetch(`${EDGE_FUNCTION_URL}/credentials/payer/${payer.id}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${token}`,
         apikey: supabaseAnonKey,
       },
     })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({})) as { error?: string }
+      throw new Error(d.error ?? `Delete failed (${res.status})`)
+    }
     payers.value.splice(index, 1)
   } catch (e: unknown) {
     console.error('[BillingSetup/delete-payer]', String(e))
+    payerError.value = e instanceof Error ? e.message : 'Failed to delete payer'
   }
 }
 

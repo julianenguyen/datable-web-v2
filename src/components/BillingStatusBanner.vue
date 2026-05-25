@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { AlertTriangle, Info, XCircle } from 'lucide-vue-next'
 import { supabase, supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
@@ -54,7 +54,9 @@ interface BannerConfig {
   linkExternal?: boolean
 }
 
-function getBannerConfig(): BannerConfig | null {
+// Computed so the template reads one stable value per render cycle
+// instead of calling getBannerConfig() 8+ times with a non-null assertion.
+const bannerConfig = computed<BannerConfig | null>(() => {
   const s = status.value
   if (!s || !loaded.value) return null
 
@@ -68,12 +70,23 @@ function getBannerConfig(): BannerConfig | null {
     }
   }
 
-  // OIG exclusion — no self-service path
+  // OIG exclusion — no self-service path, never reveal reason
   if (s.billing_lock_reason === 'oig_excluded' || s.oig_flagged) {
     return {
       variant: 'red',
       message:
         'Your billing features are currently unavailable. Please contact support@datable.health for assistance.',
+    }
+  }
+
+  // NPI unverified (e.g. after annual re-verification failure)
+  if (s.billing_lock_reason === 'npi_unverified') {
+    return {
+      variant: 'red',
+      message:
+        'Your NPI could not be verified. Billing features are locked until your credentials are updated.',
+      linkText: 'Update credentials',
+      linkHref: '/settings/credentials',
     }
   }
 
@@ -119,6 +132,16 @@ function getBannerConfig(): BannerConfig | null {
     }
   }
 
+  // TIN missing (billing profile not yet completed)
+  if (s.billing_lock_reason === 'tin_missing') {
+    return {
+      variant: 'blue',
+      message: 'Your billing setup is incomplete. Add your TIN to unlock billing features.',
+      linkText: 'Complete billing setup',
+      linkHref: '/billing-setup',
+    }
+  }
+
   // CAQH re-attestation reminder (only shown when no other banner)
   if (s.caqh_reminder_due && s.billing_enabled) {
     return {
@@ -133,7 +156,7 @@ function getBannerConfig(): BannerConfig | null {
 
   // All clear
   return null
-}
+})
 
 const variantClasses: Record<BannerVariant, { wrapper: string; icon: string; text: string; link: string }> = {
   blue: {
@@ -168,30 +191,31 @@ function handleLinkClick(banner: BannerConfig, event: MouseEvent) {
   event.preventDefault()
   router.push(banner.linkHref)
 }
+
 </script>
 
 <template>
-  <template v-if="getBannerConfig() !== null">
+  <template v-if="bannerConfig !== null">
     <div
-      :class="['px-4 py-3 flex items-start gap-3 rounded-none text-sm', variantClasses[getBannerConfig()!.variant].wrapper]"
+      :class="['px-4 py-3 flex items-start gap-3 rounded-none text-sm', variantClasses[bannerConfig!.variant].wrapper]"
       role="alert"
     >
       <component
-        :is="getBannerConfig()!.variant === 'blue' ? Info : getBannerConfig()!.variant === 'red' ? XCircle : AlertTriangle"
+        :is="bannerConfig!.variant === 'blue' ? Info : bannerConfig!.variant === 'red' ? XCircle : AlertTriangle"
         class="w-4 h-4 shrink-0 mt-0.5"
-        :class="variantClasses[getBannerConfig()!.variant].icon"
+        :class="variantClasses[bannerConfig!.variant].icon"
       />
-      <span :class="variantClasses[getBannerConfig()!.variant].text">
-        {{ getBannerConfig()!.message }}
+      <span :class="variantClasses[bannerConfig!.variant].text">
+        {{ bannerConfig!.message }}
         <a
-          v-if="getBannerConfig()!.linkText"
-          :href="getBannerConfig()!.linkHref ?? '#'"
-          :target="getBannerConfig()!.linkExternal ? '_blank' : undefined"
-          :rel="getBannerConfig()!.linkExternal ? 'noopener noreferrer' : undefined"
-          :class="['ml-1.5', variantClasses[getBannerConfig()!.variant].link]"
-          @click="handleLinkClick(getBannerConfig()!, $event)"
+          v-if="bannerConfig!.linkText"
+          :href="bannerConfig!.linkHref ?? '#'"
+          :target="bannerConfig!.linkExternal ? '_blank' : undefined"
+          :rel="bannerConfig!.linkExternal ? 'noopener noreferrer' : undefined"
+          :class="['ml-1.5', variantClasses[bannerConfig!.variant].link]"
+          @click="handleLinkClick(bannerConfig!, $event)"
         >
-          {{ getBannerConfig()!.linkText }}
+          {{ bannerConfig!.linkText }}
         </a>
       </span>
     </div>

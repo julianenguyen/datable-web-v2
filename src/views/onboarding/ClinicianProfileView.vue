@@ -146,7 +146,8 @@ async function handleContinue() {
         name: profileName,
         email: auth.user.email!,
         individual_npi: individualNpi.value.replace(/\D/g, ''),
-        npi_verified: npiStatus.value === 'verified',
+        // 'mismatch' means the NPI was found and the user confirmed it's theirs
+        npi_verified: npiStatus.value === 'verified' || npiStatus.value === 'mismatch',
         npi_verification_timestamp: npiIsVerified.value ? npiVerifiedAt.value : null,
         taxonomy_code: npiTaxonomyCode.value || null,
         license_type: licenseType.value,

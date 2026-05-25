@@ -159,8 +159,8 @@ async function handleSave() {
       }
     }
 
-    saveSuccess.value = true
     await loadCredentials()
+    saveSuccess.value = true
   } catch (e: unknown) {
     saveError.value = e instanceof Error ? e.message : 'An error occurred'
   } finally {
@@ -258,7 +258,6 @@ onMounted(loadCredentials)
               <input
                 v-model="licenseExpirationDate"
                 type="date"
-                :min="todayIso"
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
