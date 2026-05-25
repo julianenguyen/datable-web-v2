@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, CheckCircle2 } from 'lucide-vue-next'
+import InitiatingVisitWizard from '@/components/InitiatingVisitWizard.vue'
 
 const router = useRouter()
 
@@ -15,6 +16,8 @@ const error = ref('')
 const success = ref(false)
 const inviteLink = ref('')
 const deliveryWarning = ref('')
+const newClientId = ref('')
+const showWizard = ref(false)
 
 function copyInviteLink() {
   navigator.clipboard.writeText(inviteLink.value).catch(() => {})
@@ -63,10 +66,9 @@ async function handleInvite() {
       deliveryWarning.value = 'Client added but invite delivery failed. Share the link below manually.'
     }
 
+    newClientId.value = data.id
     success.value = true
-
-    // Auto-navigate back to roster after 3s so the new client is visible
-    setTimeout(() => router.push('/'), 3000)
+    showWizard.value = true
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
   } finally {
@@ -129,9 +131,19 @@ async function handleInvite() {
           @click="router.push('/')"
           class="w-full text-sm font-medium text-teal-600 hover:text-teal-700 py-2"
         >
-          Go to roster now →
+          Skip and go to roster →
         </button>
       </div>
+
+      <!-- Initiating Visit Wizard — opens immediately after client creation -->
+      <InitiatingVisitWizard
+        v-if="showWizard"
+        :client-id="newClientId"
+        :client-name="name.trim()"
+        mode="onboarding"
+        :on-complete="() => router.push('/')"
+        :on-cancel="() => { showWizard = false }"
+      />
 
       <form v-else @submit.prevent="handleInvite" class="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
         <div>

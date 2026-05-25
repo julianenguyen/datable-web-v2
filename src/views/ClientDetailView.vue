@@ -11,6 +11,9 @@ import AwardMilestoneDrawer from '@/components/AwardMilestoneDrawer.vue'
 import ClientMilestonesTab from '@/components/ClientMilestonesTab.vue'
 import BillingTab from '@/components/BillingTab.vue'
 import ConsentPanel from '@/components/ConsentPanel.vue'
+import InitiatingVisitStatusBadge from '@/components/InitiatingVisitStatusBadge.vue'
+import InitiatingVisitWizard from '@/components/InitiatingVisitWizard.vue'
+import DiagnosisChangeConfirmationModal from '@/components/DiagnosisChangeConfirmationModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -24,6 +27,73 @@ const insuranceStatus = ref<'insurance' | 'self_pay' | 'sliding_scale' | 'unknow
 const insuranceProvider = ref<string>('')
 const savingInsurance = ref(false)
 const isAwardDrawerOpen = ref(false)
+
+// G0323 Initiating Visit state
+type InitiatingVisitStatusKind = 'valid' | 'warning_yellow' | 'warning_orange' | 'expired' | 'missing'
+interface InitiatingVisitStatusPayload {
+  status: InitiatingVisitStatusKind
+  canBill: boolean
+  visitDate?: string
+  icd10Primary?: string
+  icd10Description?: string
+  initiatingVisitId?: string
+}
+const canBill = ref(true)
+const initiatingVisitStatusKind = ref<InitiatingVisitStatusKind>('missing')
+const currentIcd10 = ref('')
+const currentIcd10Description = ref('')
+const currentInitiatingVisitDate = ref('')
+const showInitiatingVisitWizard = ref(false)
+const wizardMode = ref<'onboarding' | 'renewal'>('onboarding')
+const initiatingVisitBadgeRef = ref<InstanceType<typeof InitiatingVisitStatusBadge> | null>(null)
+
+// Diagnosis change modal state
+const diagnosisModalOpen = ref(false)
+const diagModalPrevCode = ref('')
+const diagModalNewCode = ref('')
+const diagModalNewDesc = ref('')
+const diagModalVisitDate = ref('')
+
+function onInitiatingVisitStatusLoaded(status: InitiatingVisitStatusPayload) {
+  canBill.value = status.canBill
+  initiatingVisitStatusKind.value = status.status
+  if (status.icd10Primary) currentIcd10.value = status.icd10Primary
+  if (status.icd10Description) currentIcd10Description.value = status.icd10Description
+  if (status.visitDate) currentInitiatingVisitDate.value = status.visitDate
+  wizardMode.value = status.status === 'missing' ? 'onboarding' : 'renewal'
+}
+
+function openInitiatingVisitWizard() {
+  showInitiatingVisitWizard.value = true
+}
+
+function onWizardComplete(_id: string) {
+  showInitiatingVisitWizard.value = false
+  initiatingVisitBadgeRef.value?.reload()
+}
+
+function onWizardCancel() {
+  showInitiatingVisitWizard.value = false
+}
+
+function openDiagnosisChangeModal(newCode: string, newDesc: string) {
+  diagModalPrevCode.value = currentIcd10.value
+  diagModalNewCode.value = newCode
+  diagModalNewDesc.value = newDesc
+  diagModalVisitDate.value = currentInitiatingVisitDate.value
+  diagnosisModalOpen.value = true
+}
+
+function onDiagnosisChangeConfirm() {
+  diagnosisModalOpen.value = false
+  currentIcd10.value = diagModalNewCode.value
+  currentIcd10Description.value = diagModalNewDesc.value
+  initiatingVisitBadgeRef.value?.reload()
+}
+
+function onDiagnosisChangeCancel() {
+  diagnosisModalOpen.value = false
+}
 
 // Daily logs
 const logs = ref<Record<string, unknown>[]>([])
@@ -1762,6 +1832,15 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           </div>
         </div>
 
+        <!-- G0323 Initiating Visit status -->
+        <InitiatingVisitStatusBadge
+          ref="initiatingVisitBadgeRef"
+          :client-id="clientId"
+          :client-name="clientName"
+          :on-document-visit="openInitiatingVisitWizard"
+          @status-loaded="onInitiatingVisitStatusLoaded"
+        />
+
         <!-- Billing enrollment consent -->
         <ConsentPanel
           :client-id="clientId"
@@ -1773,8 +1852,32 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           :client-id="clientId"
           :client-name="clientName"
           :insurance-status="insuranceStatus"
+          :can-bill="canBill"
         />
       </div>
+
+      <!-- ── Initiating Visit Wizard overlay ── -->
+      <InitiatingVisitWizard
+        v-if="showInitiatingVisitWizard"
+        :client-id="clientId"
+        :client-name="clientName"
+        :mode="wizardMode"
+        :on-complete="onWizardComplete"
+        :on-cancel="onWizardCancel"
+      />
+
+      <!-- ── Diagnosis Change Confirmation Modal ── -->
+      <DiagnosisChangeConfirmationModal
+        :is-open="diagnosisModalOpen"
+        :client-id="clientId"
+        :client-name="clientName"
+        :previous-icd10="diagModalPrevCode"
+        :new-icd10="diagModalNewCode"
+        :new-icd10-description="diagModalNewDesc"
+        :initiating-visit-date="diagModalVisitDate"
+        @confirm="onDiagnosisChangeConfirm"
+        @cancel="onDiagnosisChangeCancel"
+      />
 
       <!-- ── Edit Session Modal ── -->
       <Teleport to="body">

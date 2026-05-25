@@ -17,11 +17,14 @@ interface CcmReport {
   created_at: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   clientId: string
   clientName: string
   insuranceStatus: 'insurance' | 'self_pay' | 'sliding_scale' | 'unknown'
-}>()
+  canBill?: boolean
+}>(), {
+  canBill: true,
+})
 
 const reports = ref<CcmReport[]>([])
 const isLoading = ref(true)
@@ -63,6 +66,10 @@ async function loadReports() {
 }
 
 async function generateManualReport() {
+  if (!props.canBill) {
+    error.value = 'Billing is locked — an initiating visit must be documented before generating reports.'
+    return
+  }
   generatingManual.value = true
   error.value = null
   try {
@@ -142,6 +149,18 @@ onMounted(loadReports)
 
 <template>
   <div>
+    <!-- Initiating visit billing lock banner -->
+    <div
+      v-if="!canBill"
+      class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 flex items-start gap-2.5"
+    >
+      <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+      <p class="text-sm text-amber-800">
+        <strong>G0323 billing locked.</strong>
+        Document an initiating visit above to unlock report generation.
+      </p>
+    </div>
+
     <!-- Loading -->
     <div v-if="isLoading" class="flex items-center justify-center py-20 text-gray-400">
       <svg class="animate-spin w-5 h-5 mr-2 text-teal-600" fill="none" viewBox="0 0 24 24">
@@ -168,8 +187,8 @@ onMounted(loadReports)
         <button
           v-if="insuranceStatus === 'insurance'"
           @click="generateManualReport"
-          :disabled="generatingManual"
-          class="text-sm font-medium text-teal-700 border border-teal-300 hover:bg-teal-50 disabled:opacity-60 px-4 py-2 rounded-lg transition-colors"
+          :disabled="generatingManual || !canBill"
+          class="text-sm font-medium text-teal-700 border border-teal-300 hover:bg-teal-50 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 rounded-lg transition-colors"
         >
           {{ generatingManual ? 'Generating…' : 'Generate Report for This Month' }}
         </button>
@@ -292,8 +311,8 @@ onMounted(loadReports)
         <div v-if="insuranceStatus === 'insurance'" class="pt-2">
           <button
             @click="generateManualReport"
-            :disabled="generatingManual"
-            class="text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 disabled:opacity-60 px-3 py-1.5 rounded-lg transition-colors"
+            :disabled="generatingManual || !canBill"
+            class="text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 disabled:opacity-60 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg transition-colors"
           >
             {{ generatingManual ? 'Generating…' : '+ Generate Report for This Month' }}
           </button>
