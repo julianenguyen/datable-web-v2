@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import { useOnboardingStore } from '@/stores/onboarding'
 import OnboardingLayout from './OnboardingLayout.vue'
@@ -58,18 +58,12 @@ const STATE_NAMES: Record<string, string> = {
   VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'Washington DC',
 }
 
-interface NppesResult {
-  result_count: number
-  results: Array<{
-    basic: {
-      first_name: string
-      last_name: string
-      name?: string
-      status: string
-    }
-    addresses: Array<{ city: string; state: string }>
-    taxonomies: Array<{ code: string; primary: boolean }>
-  }>
+interface NpiLookupResult {
+  found: boolean
+  active?: boolean
+  first_name?: string
+  last_name?: string
+  taxonomy_code?: string
 }
 
 async function verifyNpi() {
@@ -78,27 +72,31 @@ async function verifyNpi() {
 
   npiStatus.value = 'loading'
   try {
-    const res = await fetch(
-      `https://npiregistry.cms.hhs.gov/api/?number=${npi}&version=2.1`
-    )
-    const json: NppesResult = await res.json()
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token ?? ''
 
-    if (!json.result_count || json.result_count === 0) {
+    const res = await fetch(`${EDGE_FUNCTION_URL}/credentials/npi-lookup?npi=${npi}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: supabaseAnonKey,
+      },
+    })
+    const data: NpiLookupResult = await res.json()
+
+    if (!data.found) {
+      npiStatus.value = 'not_found'
+      return
+    }
+    if (!data.active) {
       npiStatus.value = 'not_found'
       return
     }
 
-    const provider = json.results[0]
-    if (provider.basic.status !== 'A') {
-      npiStatus.value = 'not_found'
-      return
-    }
-
-    const providerName = `${provider.basic.first_name || ''} ${provider.basic.last_name || ''}`.trim().toLowerCase()
+    const providerName = `${data.first_name || ''} ${data.last_name || ''}`.trim().toLowerCase()
     const profileName = (auth.user?.user_metadata?.name as string || '').toLowerCase()
 
-    npiVerifiedName.value = `${provider.basic.first_name || ''} ${provider.basic.last_name || ''}`.trim()
-    npiTaxonomyCode.value = provider.taxonomies?.[0]?.code || ''
+    npiVerifiedName.value = `${data.first_name || ''} ${data.last_name || ''}`.trim()
+    npiTaxonomyCode.value = data.taxonomy_code || ''
     npiVerifiedAt.value = new Date().toISOString()
 
     // Simple name match: check if either name includes a major part of the other
@@ -108,7 +106,7 @@ async function verifyNpi() {
     npiStatus.value = nameMatches ? 'verified' : 'mismatch'
   } catch {
     npiStatus.value = 'error'
-    // Silently fail — NPI not required to be verified
+    // Silently fail — NPI not required to be verified at this step
   }
 }
 

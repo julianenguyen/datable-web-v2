@@ -82,6 +82,16 @@ const router = createRouter({
       component: () => import('@/views/DashboardView.vue'),
     },
     {
+      path: '/billing-setup',
+      name: 'billing-setup',
+      component: () => import('@/views/BillingSetupView.vue'),
+    },
+    {
+      path: '/settings/credentials',
+      name: 'credential-settings',
+      component: () => import('@/views/CredentialSettingsView.vue'),
+    },
+    {
       path: '/clients/:clientId',
       name: 'client-detail',
       component: () => import('@/views/ClientDetailView.vue'),

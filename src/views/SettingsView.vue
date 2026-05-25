@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/layouts/AppLayout.vue'
 
@@ -266,12 +266,12 @@ const LICENSE_TYPES = [
   { value: 'Other', label: 'Other' },
 ]
 
-interface NppesResult {
-  result_count: number
-  results: Array<{
-    basic: { first_name: string; last_name: string; status: string }
-    taxonomies: Array<{ code: string; primary: boolean }>
-  }>
+interface NpiLookupResult {
+  found: boolean
+  active?: boolean
+  first_name?: string
+  last_name?: string
+  taxonomy_code?: string
 }
 
 async function verifyNpi() {
@@ -279,15 +279,24 @@ async function verifyNpi() {
   if (npi.length !== 10) return
   npiStatus.value = 'loading'
   try {
-    const res = await fetch(`https://npiregistry.cms.hhs.gov/api/?number=${npi}&version=2.1`)
-    const json: NppesResult = await res.json()
-    if (!json.result_count || json.result_count === 0) { npiStatus.value = 'not_found'; return }
-    const provider = json.results[0]
-    if (provider.basic.status !== 'A') { npiStatus.value = 'not_found'; return }
-    const providerName = `${provider.basic.first_name || ''} ${provider.basic.last_name || ''}`.trim().toLowerCase()
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token ?? ''
+
+    const res = await fetch(`${EDGE_FUNCTION_URL}/credentials/npi-lookup?npi=${npi}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: supabaseAnonKey,
+      },
+    })
+    const data: NpiLookupResult = await res.json()
+
+    if (!data.found) { npiStatus.value = 'not_found'; return }
+    if (!data.active) { npiStatus.value = 'not_found'; return }
+
+    const providerName = `${data.first_name || ''} ${data.last_name || ''}`.trim().toLowerCase()
     const profileName = (auth.user?.user_metadata?.name as string || '').toLowerCase()
-    npiVerifiedName.value = `${provider.basic.first_name || ''} ${provider.basic.last_name || ''}`.trim()
-    npiTaxonomyCode.value = provider.taxonomies?.[0]?.code || ''
+    npiVerifiedName.value = `${data.first_name || ''} ${data.last_name || ''}`.trim()
+    npiTaxonomyCode.value = data.taxonomy_code || ''
     npiVerifiedAt.value = new Date().toISOString()
     const profileParts = profileName.split(' ').filter(p => p.length > 1)
     const nameMatches = profileParts.some(part => providerName.includes(part)) || providerName.includes(profileName)

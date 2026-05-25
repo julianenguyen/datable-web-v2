@@ -2,6 +2,7 @@
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import { LogOut, LayoutDashboard } from 'lucide-vue-next'
+import BillingStatusBanner from '@/components/BillingStatusBanner.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -62,6 +63,7 @@ async function handleSignOut() {
 
     <!-- Main content -->
     <div class="ml-56 flex-1 flex flex-col min-h-screen">
+      <BillingStatusBanner />
       <slot />
     </div>
   </div>
