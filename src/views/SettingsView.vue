@@ -172,13 +172,14 @@ async function loadPractice() {
   // Fall back to therapists table (legacy accounts)
   const { data: therapist } = await supabase
     .from('therapists')
-    .select('name, practice_name, license_type')
+    .select('name, practice_name, license_type, timezone')
     .eq('id', auth.user.id)
     .maybeSingle()
 
   if (therapist) {
     isLegacyAccount.value = true
     practiceName.value = therapist.practice_name ?? ''
+    if (therapist.timezone) therapistTimezone.value = therapist.timezone as string
   }
 }
 
@@ -239,6 +240,43 @@ async function savePractice() {
     errorMessage.value = (e as { message?: string })?.message ?? 'Failed to update practice.'
   } finally {
     loading.value = false
+  }
+}
+
+// ─── Timezone preference ───────────────────────────────────────────────────────
+const therapistTimezone = ref('America/Chicago')
+const timezoneSaving = ref(false)
+const timezoneSaved = ref(false)
+const timezoneError = ref<string | null>(null)
+
+const COMMON_TIMEZONES = [
+  { value: 'America/New_York',    label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago',     label: 'Central Time (CT)' },
+  { value: 'America/Denver',      label: 'Mountain Time (MT)' },
+  { value: 'America/Phoenix',     label: 'Mountain Time — Arizona (no DST)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Anchorage',   label: 'Alaska Time (AKT)' },
+  { value: 'Pacific/Honolulu',    label: 'Hawaii Time (HT)' },
+]
+
+async function saveTimezone() {
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth.user || !therapistTimezone.value) return
+  timezoneSaving.value = true
+  timezoneError.value = null
+  timezoneSaved.value = false
+  try {
+    const { error } = await supabase
+      .from('therapists')
+      .update({ timezone: therapistTimezone.value })
+      .eq('id', auth.user.id)
+    if (error) throw error
+    timezoneSaved.value = true
+    setTimeout(() => { timezoneSaved.value = false }, 2000)
+  } catch (e: unknown) {
+    timezoneError.value = e instanceof Error ? e.message : 'Failed to save timezone'
+  } finally {
+    timezoneSaving.value = false
   }
 }
 
@@ -314,10 +352,13 @@ async function loadClinician() {
   if (isLegacyAccount.value) {
     const { data } = await supabase
       .from('therapists')
-      .select('license_type')
+      .select('license_type, timezone')
       .eq('id', auth.user.id)
       .maybeSingle()
-    if (data) licenseType.value = data.license_type ?? ''
+    if (data) {
+      licenseType.value = data.license_type ?? ''
+      if (data.timezone) therapistTimezone.value = data.timezone as string
+    }
     return
   }
   const { data } = await supabase
@@ -780,6 +821,34 @@ onMounted(async () => {
           {{ loading ? 'Saving…' : 'Save changes' }}
         </button>
         </template>
+
+        <!-- Timezone preference (all account types) -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Clinical Time Timezone</h3>
+          <p class="text-xs text-gray-500">
+            Your timezone is used to determine the billing month for G0323 qualifying clinical time entries.
+            Select the timezone where you primarily provide care.
+          </p>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Timezone</label>
+            <select
+              v-model="therapistTimezone"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+            >
+              <option v-for="tz in COMMON_TIMEZONES" :key="tz.value" :value="tz.value">{{ tz.label }}</option>
+            </select>
+          </div>
+          <div v-if="timezoneError" class="text-xs text-red-600">{{ timezoneError }}</div>
+          <div v-if="timezoneSaved" class="text-xs text-green-600">Timezone saved.</div>
+          <button
+            type="button"
+            class="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+            :disabled="timezoneSaving"
+            @click="saveTimezone"
+          >
+            {{ timezoneSaving ? 'Saving…' : 'Save timezone' }}
+          </button>
+        </div>
       </div>
 
       <!-- ── Insurance tab ── -->

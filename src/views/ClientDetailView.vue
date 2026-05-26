@@ -19,6 +19,10 @@ import ConsentRevokeModal from '@/components/consent/ConsentRevokeModal.vue'
 import CarePlanStatusBadge from '@/components/care-plan/CarePlanStatusBadge.vue'
 import CarePlanWizard from '@/components/care-plan/CarePlanWizard.vue'
 import CarePlanMonthlyConfirmation from '@/components/care-plan/CarePlanMonthlyConfirmation.vue'
+import ClinicalTimeWidget from '@/components/billing/ClinicalTimeWidget.vue'
+import TimeLogModal from '@/components/billing/TimeLogModal.vue'
+import TimeLogHistory from '@/components/billing/TimeLogHistory.vue'
+import BillingReadinessPanel from '@/components/billing/BillingReadinessPanel.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -46,7 +50,10 @@ interface InitiatingVisitStatusPayload {
 const visitCanBill = ref(true)
 const consentCanBill = ref(true)
 const carePlanCanBill = ref(true)
-const canBill = computed(() => visitCanBill.value && consentCanBill.value && carePlanCanBill.value)
+const clinicalTimeCanBill = ref(false)
+const canBill = computed(
+  () => visitCanBill.value && consentCanBill.value && carePlanCanBill.value && clinicalTimeCanBill.value,
+)
 const initiatingVisitStatusKind = ref<InitiatingVisitStatusKind>('missing')
 const currentIcd10 = ref('')
 const currentIcd10Description = ref('')
@@ -68,6 +75,14 @@ const carePlanGateReason = ref<string | null>(null)
 function onCarePlanStatusLoaded(status: { canBill: boolean; reason: string | null }) {
   carePlanCanBill.value = status.canBill
   carePlanGateReason.value = status.reason
+  carePlanGateStatus.value = status.canBill ? 'pass' : (status.reason === 'review_overdue' ? 'warn' : 'fail')
+  carePlanGateMessage.value = status.reason === 'no_care_plan'
+    ? 'No care plan on file'
+    : status.reason === 'monthly_confirmation_needed'
+      ? 'Monthly review confirmation required'
+      : status.reason === 'review_overdue'
+        ? 'Care plan review is overdue'
+        : null
 }
 
 function onCarePlanAction() {
@@ -89,6 +104,37 @@ function onMonthlyConfirmationComplete() {
   carePlanBadgeRef.value?.reload()
 }
 
+// Clinical time state
+type GateStatusKind = 'loading' | 'pass' | 'fail' | 'warn'
+const billingTabRef = ref<InstanceType<typeof BillingTab> | null>(null)
+const clinicalTimeWidgetRef = ref<InstanceType<typeof ClinicalTimeWidget> | null>(null)
+const clinicalTimeHistoryRef = ref<InstanceType<typeof TimeLogHistory> | null>(null)
+const showTimeLogModal = ref(false)
+const clinicalTimeGateStatus = ref<GateStatusKind>('loading')
+const clinicalTimeGateMessage = ref<string | null>(null)
+const visitGateStatus = ref<GateStatusKind>('loading')
+const visitGateMessage = ref<string | null>(null)
+const consentGateStatus = ref<GateStatusKind>('loading')
+const consentGateMessage = ref<string | null>(null)
+const carePlanGateStatus = ref<GateStatusKind>('loading')
+const carePlanGateMessage = ref<string | null>(null)
+
+function onClinicalTimeStatusLoaded(meetsThreshold: boolean, totalMinutes: number) {
+  clinicalTimeCanBill.value = meetsThreshold
+  clinicalTimeGateStatus.value = meetsThreshold ? 'pass' : (totalMinutes > 0 ? 'warn' : 'fail')
+  clinicalTimeGateMessage.value = meetsThreshold
+    ? `${totalMinutes} minutes recorded — 20-minute threshold met`
+    : totalMinutes > 0
+      ? `${totalMinutes} of 20 minutes recorded — ${20 - totalMinutes} more needed`
+      : 'No qualifying time logged this month'
+}
+
+function onTimeEntrySaved() {
+  showTimeLogModal.value = false
+  clinicalTimeWidgetRef.value?.reload()
+  clinicalTimeHistoryRef.value?.reload()
+}
+
 // Diagnosis change modal state
 const diagnosisModalOpen = ref(false)
 const diagModalPrevCode = ref('')
@@ -103,6 +149,15 @@ function onInitiatingVisitStatusLoaded(status: InitiatingVisitStatusPayload) {
   if (status.icd10Description) currentIcd10Description.value = status.icd10Description
   if (status.visitDate) currentInitiatingVisitDate.value = status.visitDate
   wizardMode.value = status.status === 'missing' ? 'onboarding' : 'renewal'
+  // Update readiness panel
+  visitGateStatus.value = status.canBill ? 'pass' : (status.status === 'warning_yellow' || status.status === 'warning_orange' ? 'warn' : 'fail')
+  visitGateMessage.value = status.status === 'missing'
+    ? 'No initiating visit on file'
+    : status.status === 'expired'
+      ? 'Initiating visit has expired'
+      : status.status === 'warning_orange' || status.status === 'warning_yellow'
+        ? 'Initiating visit expiring soon'
+        : null
 }
 
 function openInitiatingVisitWizard() {
@@ -1899,7 +1954,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
             :client-name="clientName"
             :on-consent-documented="onConsentDocumented"
             :on-revoke-request="() => showRevokeModal = true"
-            :on-consent-can-bill="(v: boolean) => consentCanBill = v"
+            :on-consent-can-bill="(v: boolean) => { consentCanBill = v; consentGateStatus = v ? 'pass' : 'fail'; consentGateMessage = v ? null : 'Patient consent not on file or not confirmed' }"
           />
         </div>
 
@@ -1931,6 +1986,37 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           />
         </div>
 
+        <!-- G0323 Qualifying Clinical Time (Item 5) -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <ClinicalTimeWidget
+            ref="clinicalTimeWidgetRef"
+            :client-id="clientId"
+            @status-loaded="onClinicalTimeStatusLoaded"
+            @log-entry="showTimeLogModal = true"
+          />
+          <TimeLogHistory
+            ref="clinicalTimeHistoryRef"
+            :client-id="clientId"
+          />
+        </div>
+
+        <!-- G0323 Billing Readiness Panel -->
+        <BillingReadinessPanel
+          :visit-status="visitGateStatus"
+          :visit-message="visitGateMessage"
+          :on-document-visit="openInitiatingVisitWizard"
+          :consent-status="consentGateStatus"
+          :consent-message="consentGateMessage"
+          :care-plan-status="carePlanGateStatus"
+          :care-plan-message="carePlanGateMessage"
+          :on-manage-care-plan="onCarePlanAction"
+          :clinical-time-status="clinicalTimeGateStatus"
+          :clinical-time-message="clinicalTimeGateMessage"
+          :on-log-time="() => showTimeLogModal = true"
+          :generating="false"
+          @generate-report="billingTabRef?.generateManualReport()"
+        />
+
         <!-- Billing enrollment consent -->
         <ConsentPanel
           :client-id="clientId"
@@ -1939,6 +2025,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
 
         <!-- Report list -->
         <BillingTab
+          ref="billingTabRef"
           :client-id="clientId"
           :client-name="clientName"
           :insurance-status="insuranceStatus"
@@ -1981,6 +2068,14 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         :client-name="clientName"
         @confirmed="onMonthlyConfirmationComplete"
         @closed="showMonthlyConfirmation = false"
+      />
+
+      <!-- ── Time Log Modal ── -->
+      <TimeLogModal
+        :client-id="clientId"
+        :open="showTimeLogModal"
+        @close="showTimeLogModal = false"
+        @saved="onTimeEntrySaved"
       />
 
       <!-- ── Diagnosis Change Confirmation Modal ── -->

@@ -145,6 +145,8 @@ function formatDate(iso: string) {
 }
 
 onMounted(loadReports)
+
+defineExpose({ generateManualReport })
 </script>
 
 <template>
