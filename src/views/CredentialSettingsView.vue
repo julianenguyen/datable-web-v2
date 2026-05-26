@@ -99,14 +99,17 @@ async function loadCredentials() {
       .eq('therapist_id', userId)
       .maybeSingle()
 
+    // data type includes GenericStringError in newer Supabase client typings;
+    // we've already thrown on error above so cast through unknown is safe here
+    const row = data as unknown as Omit<CredentialData, 'caqh_id'>
     credential.value = {
-      ...(data as Omit<CredentialData, 'caqh_id'>),
+      ...row,
       caqh_id: profileData?.caqh_id ?? null,
     }
 
     // Pre-populate edit fields
-    licenseExpirationDate.value = data.license_expiration_date ?? ''
-    isIndependentlyLicensed.value = data.is_independently_licensed ?? true
+    licenseExpirationDate.value = row.license_expiration_date ?? ''
+    isIndependentlyLicensed.value = row.is_independently_licensed ?? true
     caqhId.value = profileData?.caqh_id ?? ''
   } catch (e: unknown) {
     loadError.value = e instanceof Error ? e.message : 'Failed to load credentials'
