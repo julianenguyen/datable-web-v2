@@ -16,6 +16,9 @@ import InitiatingVisitWizard from '@/components/InitiatingVisitWizard.vue'
 import DiagnosisChangeConfirmationModal from '@/components/DiagnosisChangeConfirmationModal.vue'
 import ConsentStatusBadge from '@/components/consent/ConsentStatusBadge.vue'
 import ConsentRevokeModal from '@/components/consent/ConsentRevokeModal.vue'
+import CarePlanStatusBadge from '@/components/care-plan/CarePlanStatusBadge.vue'
+import CarePlanWizard from '@/components/care-plan/CarePlanWizard.vue'
+import CarePlanMonthlyConfirmation from '@/components/care-plan/CarePlanMonthlyConfirmation.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -42,7 +45,8 @@ interface InitiatingVisitStatusPayload {
 }
 const visitCanBill = ref(true)
 const consentCanBill = ref(true)
-const canBill = computed(() => visitCanBill.value && consentCanBill.value)
+const carePlanCanBill = ref(true)
+const canBill = computed(() => visitCanBill.value && consentCanBill.value && carePlanCanBill.value)
 const initiatingVisitStatusKind = ref<InitiatingVisitStatusKind>('missing')
 const currentIcd10 = ref('')
 const currentIcd10Description = ref('')
@@ -54,6 +58,36 @@ const initiatingVisitBadgeRef = ref<InstanceType<typeof InitiatingVisitStatusBad
 // Consent state
 const consentStatusBadgeRef = ref<InstanceType<typeof ConsentStatusBadge> | null>(null)
 const showRevokeModal = ref(false)
+
+// Care plan state
+const carePlanBadgeRef = ref<InstanceType<typeof CarePlanStatusBadge> | null>(null)
+const showCarePlanWizard = ref(false)
+const showMonthlyConfirmation = ref(false)
+const carePlanGateReason = ref<string | null>(null)
+
+function onCarePlanStatusLoaded(status: { canBill: boolean; reason: string | null }) {
+  carePlanCanBill.value = status.canBill
+  carePlanGateReason.value = status.reason
+}
+
+function onCarePlanAction() {
+  if (carePlanGateReason.value === 'monthly_confirmation_needed') {
+    showMonthlyConfirmation.value = true
+  } else {
+    // no_care_plan, review_overdue, or any other → open wizard
+    showCarePlanWizard.value = true
+  }
+}
+
+function onCarePlanWizardComplete(_carePlanId: string) {
+  showCarePlanWizard.value = false
+  carePlanBadgeRef.value?.reload()
+}
+
+function onMonthlyConfirmationComplete() {
+  showMonthlyConfirmation.value = false
+  carePlanBadgeRef.value?.reload()
+}
 
 // Diagnosis change modal state
 const diagnosisModalOpen = ref(false)
@@ -1878,6 +1912,25 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           @status-loaded="onInitiatingVisitStatusLoaded"
         />
 
+        <!-- G0323 Care Plan status -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-900">Individualized Care Plan (G0323)</h3>
+            <button
+              class="text-xs text-teal-600 hover:text-teal-700 font-medium"
+              @click="showCarePlanWizard = true"
+            >
+              + New Version
+            </button>
+          </div>
+          <CarePlanStatusBadge
+            ref="carePlanBadgeRef"
+            :client-id="clientId"
+            :on-action="onCarePlanAction"
+            @status-loaded="onCarePlanStatusLoaded"
+          />
+        </div>
+
         <!-- Billing enrollment consent -->
         <ConsentPanel
           :client-id="clientId"
@@ -1910,6 +1963,24 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         :mode="wizardMode"
         :on-complete="onWizardComplete"
         :on-cancel="onWizardCancel"
+      />
+
+      <!-- ── Care Plan Wizard overlay ── -->
+      <CarePlanWizard
+        v-if="showCarePlanWizard"
+        :client-id="clientId"
+        :client-name="clientName"
+        :on-complete="onCarePlanWizardComplete"
+        :on-cancel="() => showCarePlanWizard = false"
+      />
+
+      <!-- ── Care Plan Monthly Confirmation Modal ── -->
+      <CarePlanMonthlyConfirmation
+        v-if="showMonthlyConfirmation"
+        :client-id="clientId"
+        :client-name="clientName"
+        @confirmed="onMonthlyConfirmationComplete"
+        @closed="showMonthlyConfirmation = false"
       />
 
       <!-- ── Diagnosis Change Confirmation Modal ── -->

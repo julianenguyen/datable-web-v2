@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { AlertTriangle, Clock, CheckCircle2, Plus, FileText, ChevronRight, ChevronDown, RotateCcw, Archive } from 'lucide-vue-next'
+import CarePlanStatusBadge from '@/components/care-plan/CarePlanStatusBadge.vue'
 
 interface ClientCard {
   id: string
@@ -316,6 +317,12 @@ function openClientDetail(clientId: string) {
             </div>
 
             <div class="flex items-center gap-2 shrink-0">
+              <CarePlanStatusBadge
+                :client-id="client.id"
+                :compact="true"
+                :on-action="() => openClientDetail(client.id)"
+                @click.stop
+              />
               <button
                 v-if="client.status === 'active'"
                 @click.stop="openNewSessionSummary(client.id, client.cycleId)"
