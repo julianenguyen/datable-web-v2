@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, CheckCircle2 } from 'lucide-vue-next'
+import VerbalConsentWizard from '@/components/consent/VerbalConsentWizard.vue'
 import InitiatingVisitWizard from '@/components/InitiatingVisitWizard.vue'
 
 const router = useRouter()
@@ -17,10 +18,23 @@ const success = ref(false)
 const inviteLink = ref('')
 const deliveryWarning = ref('')
 const newClientId = ref('')
+const showConsentWizard = ref(false)
 const showWizard = ref(false)
 
 function copyInviteLink() {
   navigator.clipboard.writeText(inviteLink.value).catch(() => {})
+}
+
+// Called when verbal consent is successfully documented
+function onConsentComplete() {
+  showConsentWizard.value = false
+  showWizard.value = true
+}
+
+// Verbal consent is required — cancelling returns to roster
+function onConsentCancel() {
+  showConsentWizard.value = false
+  router.push('/')
 }
 
 async function handleInvite() {
@@ -68,7 +82,7 @@ async function handleInvite() {
 
     newClientId.value = data.id
     success.value = true
-    showWizard.value = true
+    showConsentWizard.value = true
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
   } finally {
@@ -103,7 +117,7 @@ async function handleInvite() {
           <p class="text-sm text-gray-600 mb-1">
             They'll appear as "Invite pending" on your roster until they complete onboarding.
           </p>
-          <p class="text-xs text-gray-400">Returning to roster in a moment…</p>
+          <p class="text-xs text-gray-400">Document verbal consent below, then record the initiating visit.</p>
         </div>
 
         <!-- Delivery warning -->
@@ -135,17 +149,26 @@ async function handleInvite() {
         </button>
       </div>
 
-      <!-- Initiating Visit Wizard — opens immediately after client creation -->
+      <!-- Step 1: Verbal Consent Wizard — required before initiating visit -->
+      <VerbalConsentWizard
+        :is-open="showConsentWizard"
+        :client-id="newClientId"
+        :client-name="name.trim()"
+        :on-complete="onConsentComplete"
+        :on-cancel="onConsentCancel"
+      />
+
+      <!-- Step 2: Initiating Visit Wizard — opens after consent is documented -->
       <InitiatingVisitWizard
         v-if="showWizard"
         :client-id="newClientId"
         :client-name="name.trim()"
         mode="onboarding"
         :on-complete="() => router.push('/')"
-        :on-cancel="() => { showWizard = false }"
+        :on-cancel="() => router.push('/')"
       />
 
-      <form v-else @submit.prevent="handleInvite" class="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+      <form v-if="!showWizard" @submit.prevent="handleInvite" class="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">
             Client name <span class="text-red-500">*</span>

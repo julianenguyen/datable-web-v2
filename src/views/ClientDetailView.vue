@@ -14,6 +14,8 @@ import ConsentPanel from '@/components/ConsentPanel.vue'
 import InitiatingVisitStatusBadge from '@/components/InitiatingVisitStatusBadge.vue'
 import InitiatingVisitWizard from '@/components/InitiatingVisitWizard.vue'
 import DiagnosisChangeConfirmationModal from '@/components/DiagnosisChangeConfirmationModal.vue'
+import ConsentStatusBadge from '@/components/consent/ConsentStatusBadge.vue'
+import ConsentRevokeModal from '@/components/consent/ConsentRevokeModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -46,6 +48,10 @@ const currentInitiatingVisitDate = ref('')
 const showInitiatingVisitWizard = ref(false)
 const wizardMode = ref<'onboarding' | 'renewal'>('onboarding')
 const initiatingVisitBadgeRef = ref<InstanceType<typeof InitiatingVisitStatusBadge> | null>(null)
+
+// Consent state
+const consentStatusBadgeRef = ref<InstanceType<typeof ConsentStatusBadge> | null>(null)
+const showRevokeModal = ref(false)
 
 // Diagnosis change modal state
 const diagnosisModalOpen = ref(false)
@@ -93,6 +99,22 @@ function onDiagnosisChangeConfirm() {
 
 function onDiagnosisChangeCancel() {
   diagnosisModalOpen.value = false
+}
+
+function onConsentDocumented() {
+  // When verbal consent is documented, reload initiating visit badge to update canBill
+  initiatingVisitBadgeRef.value?.reload()
+  consentStatusBadgeRef.value?.reload()
+}
+
+function onConsentRevoked() {
+  showRevokeModal.value = false
+  consentStatusBadgeRef.value?.reload()
+  initiatingVisitBadgeRef.value?.reload()
+}
+
+function onRevokeCancelled() {
+  showRevokeModal.value = false
 }
 
 // Daily logs
@@ -1832,6 +1854,18 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           </div>
         </div>
 
+        <!-- G0323 BHI Consent Status -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <h3 class="text-sm font-semibold text-gray-900 mb-3">BHI Consent (G0323)</h3>
+          <ConsentStatusBadge
+            ref="consentStatusBadgeRef"
+            :client-id="clientId"
+            :client-name="clientName"
+            :on-consent-documented="onConsentDocumented"
+            :on-revoke-request="() => showRevokeModal = true"
+          />
+        </div>
+
         <!-- G0323 Initiating Visit status -->
         <InitiatingVisitStatusBadge
           ref="initiatingVisitBadgeRef"
@@ -1855,6 +1889,15 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           :can-bill="canBill"
         />
       </div>
+
+      <!-- ── Consent Revoke Modal ── -->
+      <ConsentRevokeModal
+        :is-open="showRevokeModal"
+        :client-id="clientId"
+        :client-name="clientName"
+        :on-revoked="onConsentRevoked"
+        :on-cancel="onRevokeCancelled"
+      />
 
       <!-- ── Initiating Visit Wizard overlay ── -->
       <InitiatingVisitWizard
