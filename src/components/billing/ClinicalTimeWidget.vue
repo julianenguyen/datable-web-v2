@@ -38,8 +38,6 @@ const emit = defineEmits<{
   logEntry: []   // user clicked "Log Time" button
 }>()
 
-defineExpose({ reload })
-
 // ── State ─────────────────────────────────────────────────────────────────────
 const widgetState = ref<WidgetState>('loading')
 const summary = ref<SummaryData | null>(null)
