@@ -29,6 +29,7 @@ const props = defineProps<{
   therapistNpi?: string
   onConsentDocumented?: () => void
   onRevokeRequest?: () => void
+  onConsentCanBill?: (canBill: boolean) => void
 }>()
 
 const loading = ref(true)
@@ -55,7 +56,11 @@ async function fetchStatus() {
       throw new Error(d.error ?? 'Failed to fetch consent status')
     }
 
-    consentStatus.value = await res.json() as ConsentStatusResponse
+    const data = await res.json() as ConsentStatusResponse
+    consentStatus.value = data
+    // Notify parent whether this consent status permits billing
+    const billableStatuses = ['verbal_pending', 'verbal_only_lapsed', 'fully_confirmed']
+    props.onConsentCanBill?.(billableStatuses.includes(data.status))
   } catch (e: unknown) {
     fetchError.value = e instanceof Error ? e.message : 'Failed to load consent status'
   } finally {

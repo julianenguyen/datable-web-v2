@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
@@ -40,7 +40,9 @@ interface InitiatingVisitStatusPayload {
   icd10Description?: string
   initiatingVisitId?: string
 }
-const canBill = ref(true)
+const visitCanBill = ref(true)
+const consentCanBill = ref(true)
+const canBill = computed(() => visitCanBill.value && consentCanBill.value)
 const initiatingVisitStatusKind = ref<InitiatingVisitStatusKind>('missing')
 const currentIcd10 = ref('')
 const currentIcd10Description = ref('')
@@ -61,7 +63,7 @@ const diagModalNewDesc = ref('')
 const diagModalVisitDate = ref('')
 
 function onInitiatingVisitStatusLoaded(status: InitiatingVisitStatusPayload) {
-  canBill.value = status.canBill
+  visitCanBill.value = status.canBill
   initiatingVisitStatusKind.value = status.status
   if (status.icd10Primary) currentIcd10.value = status.icd10Primary
   if (status.icd10Description) currentIcd10Description.value = status.icd10Description
@@ -1863,6 +1865,7 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
             :client-name="clientName"
             :on-consent-documented="onConsentDocumented"
             :on-revoke-request="() => showRevokeModal = true"
+            :on-consent-can-bill="(v: boolean) => consentCanBill = v"
           />
         </div>
 
