@@ -117,6 +117,18 @@ const router = createRouter({
       component: () => import('@/views/InviteClientView.vue'),
     },
     {
+      path: '/billing',
+      name: 'billing-hub',
+      component: () => import('@/views/billing/BillingHubView.vue'),
+    },
+    {
+      // Must come before /billing/:year/:month to avoid the static segment
+      // "audit-drill-down" being treated as a year param
+      path: '/billing/audit-drill-down/:reportId',
+      name: 'audit-drill-down',
+      component: () => import('@/views/billing/AuditDrillDownView.vue'),
+    },
+    {
       path: '/billing/:year/:month',
       name: 'billing-month',
       component: () => import('@/views/billing/BillingMonthView.vue'),

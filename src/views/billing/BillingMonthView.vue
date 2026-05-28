@@ -12,17 +12,34 @@ import {
   Loader2,
   XCircle,
   SkipForward,
+  ExternalLink,
 } from 'lucide-vue-next'
 import RatingScaleAdminModal from '@/components/billing/RatingScaleAdminModal.vue'
 import BillingReportPreviewModal from '@/components/billing/BillingReportPreviewModal.vue'
+
+// ── Props (optional — when embedded in BillingHubView) ────────────────────────
+
+interface Props {
+  year?: string
+  month?: string
+  embedded?: boolean  // when true, suppresses AppLayout wrapper and page chrome
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  year: undefined,
+  month: undefined,
+  embedded: false,
+})
 
 // ── Route ──────────────────────────────────────────────────────────────────────
 
 const route = useRoute()
 const router = useRouter()
-const year = route.params.year as string
-const month = route.params.month as string
-const billingMonth = `${year}-${month}`
+
+// Prefer props over route params — allows embedding in BillingHubView without route params
+const resolvedYear = computed(() => props.year ?? (route.params.year as string) ?? String(new Date().getFullYear()))
+const resolvedMonth = computed(() => props.month ?? (route.params.month as string) ?? String(new Date().getMonth() + 1).padStart(2, '0'))
+const billingMonth = computed(() => `${resolvedYear.value}-${resolvedMonth.value}`)
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -92,7 +109,7 @@ const skipLoading = ref(false)
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 
-const billingMonthLabel = computed(() => reportData.value?.billing_month_label ?? billingMonth)
+const billingMonthLabel = computed(() => reportData.value?.billing_month_label ?? billingMonth.value)
 
 // ── Load ──────────────────────────────────────────────────────────────────────
 
@@ -102,7 +119,7 @@ async function load() {
   try {
     const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch(
-      `${EDGE_FUNCTION_URL}/billing-report/ready-to-bill?billing_month=${billingMonth}`,
+      `${EDGE_FUNCTION_URL}/billing-report/ready-to-bill?billing_month=${billingMonth.value}`,
       { headers: { Authorization: `Bearer ${session?.access_token}` } }
     )
     if (!res.ok) {
@@ -138,7 +155,7 @@ async function generateReport(entry: ReadyEntry) {
       },
       body: JSON.stringify({
         client_id: entry.client_id,
-        billing_month: billingMonth,
+        billing_month: billingMonth.value,
         rating_scale_90day_acknowledged: needsAck,
       }),
     })
@@ -183,7 +200,7 @@ async function confirmSkip() {
       },
       body: JSON.stringify({
         client_id: skipModalClientId.value,
-        billing_month: billingMonth,
+        billing_month: billingMonth.value,
         skip_reason: skipReason.value.trim(),
       }),
     })
@@ -230,17 +247,17 @@ function onAttested(pdfUrl: string, _csvUrl: string) {
 </script>
 
 <template>
-  <AppLayout>
-    <div class="px-8 py-8 max-w-5xl mx-auto">
+  <component :is="embedded ? 'div' : AppLayout">
+    <div :class="embedded ? '' : 'px-8 py-8 max-w-5xl mx-auto'">
 
-      <!-- Page header -->
-      <div class="mb-6 flex items-center justify-between">
+      <!-- Page header (standalone mode only) -->
+      <div v-if="!embedded" class="mb-6 flex items-center justify-between">
         <div>
           <button
             class="text-xs text-gray-400 hover:text-gray-600 mb-1 flex items-center gap-1"
-            @click="router.push('/')"
+            @click="router.push('/billing')"
           >
-            ← Back to Roster
+            ← Back to Billing Hub
           </button>
           <h1 class="text-2xl font-bold text-gray-900">Billing — {{ billingMonthLabel }}</h1>
           <p class="text-sm text-gray-500 mt-0.5">G0323 Monthly Billing Summary</p>
@@ -401,12 +418,22 @@ function onAttested(pdfUrl: string, _csvUrl: string) {
                   {{ entry.status === 'locked' ? 'Locked & Attested' : entry.status }}
                 </span>
               </div>
-              <button
-                class="text-xs font-medium text-teal-600 underline"
-                @click="openExistingReport(entry)"
-              >
-                View Report
-              </button>
+              <div class="flex items-center gap-3">
+                <button
+                  v-if="entry.status === 'locked'"
+                  class="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                  @click="router.push(`/billing/audit-drill-down/${entry.report_id}`)"
+                >
+                  <ExternalLink :size="12" />
+                  View Audit Response
+                </button>
+                <button
+                  class="text-xs font-medium text-teal-600 underline"
+                  @click="openExistingReport(entry)"
+                >
+                  View Report
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -459,6 +486,7 @@ function onAttested(pdfUrl: string, _csvUrl: string) {
       @attested="onAttested"
     />
 
+
     <!-- ── Skip Modal ────────────────────────────────────────────────────────── -->
     <div
       v-if="skipModalClientId"
@@ -496,5 +524,5 @@ function onAttested(pdfUrl: string, _csvUrl: string) {
       </div>
     </div>
 
-  </AppLayout>
+  </component>
 </template>

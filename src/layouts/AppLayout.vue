@@ -11,10 +11,6 @@ async function handleSignOut() {
   await auth.signOut()
   router.push('/auth')
 }
-
-// Link to current billing month
-const now = new Date()
-const billingMonthRoute = `/billing/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
 </script>
 
 <template>
@@ -40,7 +36,7 @@ const billingMonthRoute = `/billing/${now.getFullYear()}/${String(now.getMonth()
         </router-link>
 
         <router-link
-          :to="billingMonthRoute"
+          to="/billing"
           class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
           :class="$route.path.startsWith('/billing')
             ? 'bg-teal-50 text-teal-700'
