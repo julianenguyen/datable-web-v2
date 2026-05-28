@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
-import { supabase, EDGE_FUNCTION_URL } from '@/lib/supabase'
+import { supabase, supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
 import {
   Receipt,
   Shield,
@@ -20,7 +20,6 @@ import BillingHistoryPanel from '@/components/billing/BillingHistoryPanel.vue'
 import AuditTrackerPanel from '@/components/billing/AuditTrackerPanel.vue'
 import AuditTrackerFormModal from '@/components/billing/AuditTrackerFormModal.vue'
 import BillingSetupCard from '@/components/BillingSetupCard.vue'
-import { supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
 
 const router = useRouter()
 
