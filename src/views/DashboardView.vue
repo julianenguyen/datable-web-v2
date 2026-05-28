@@ -2,11 +2,12 @@
 import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
 import { AlertTriangle, Clock, CheckCircle2, Plus, FileText, ChevronRight, ChevronDown, RotateCcw, Archive } from 'lucide-vue-next'
 import CarePlanStatusBadge from '@/components/care-plan/CarePlanStatusBadge.vue'
 import ContactStatusBadge from '@/components/billing/ContactStatusBadge.vue'
 import CoordinationStatusBadge from '@/components/billing/CoordinationStatusBadge.vue'
+import AddPatientModal from '@/components/AddPatientModal.vue'
 
 interface ClientCard {
   id: string
@@ -36,6 +37,17 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 const showArchived = ref(false)
 const unarchivingId = ref<string | null>(null)
+
+// Add Patient modal
+const showAddPatientModal = ref(false)
+
+// invitation ID map for pending clients (clientId → invitationId)
+const invitationIds = ref<Record<string, string>>({})
+
+// Cancel confirmation
+const cancelConfirmClientId = ref<string | null>(null)
+const cancellingId = ref<string | null>(null)
+const resendingId = ref<string | null>(null)
 
 onMounted(loadClients)
 watch(() => route.fullPath, () => {
@@ -150,6 +162,25 @@ async function loadClients() {
     }
   })
 
+  // Load invitation IDs for pending clients (needed for resend/cancel actions)
+  const pendingIds = clientRows
+    .filter(c => c.status === 'pending')
+    .map(c => c.id)
+
+  if (pendingIds.length > 0) {
+    const { data: invRows } = await supabase
+      .from('patient_invitations')
+      .select('id, client_id')
+      .in('client_id', pendingIds)
+      .eq('status', 'pending')
+
+    const map: Record<string, string> = {}
+    invRows?.forEach(r => { map[r.client_id] = r.id })
+    invitationIds.value = map
+  } else {
+    invitationIds.value = {}
+  }
+
   loading.value = false
 }
 
@@ -166,6 +197,54 @@ async function unarchiveClient(clientId: string) {
     console.error('[Dashboard] unarchive failed:', e)
   } finally {
     unarchivingId.value = null
+  }
+}
+
+async function resendInvitation(clientId: string) {
+  const invitationId = invitationIds.value[clientId]
+  if (!invitationId) return
+  resendingId.value = clientId
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token ?? ''
+    await fetch(`${EDGE_FUNCTION_URL}/invitations/resend`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: supabaseAnonKey,
+      },
+      body: JSON.stringify({ invitation_id: invitationId }),
+    })
+  } catch (e) {
+    console.error('[Dashboard] resend failed:', e)
+  } finally {
+    resendingId.value = null
+  }
+}
+
+async function cancelInvitation(clientId: string) {
+  const invitationId = invitationIds.value[clientId]
+  if (!invitationId) return
+  cancellingId.value = clientId
+  cancelConfirmClientId.value = null
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token ?? ''
+    await fetch(`${EDGE_FUNCTION_URL}/invitations/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: supabaseAnonKey,
+      },
+      body: JSON.stringify({ invitation_id: invitationId }),
+    })
+    await loadClients()
+  } catch (e) {
+    console.error('[Dashboard] cancel failed:', e)
+  } finally {
+    cancellingId.value = null
   }
 }
 
@@ -228,11 +307,11 @@ function openClientDetail(clientId: string) {
           <p class="text-sm text-gray-500 mt-0.5">{{ activeCount }} active client{{ activeCount !== 1 ? 's' : '' }}</p>
         </div>
         <button
-          @click="router.push({ name: 'invite-client' })"
+          @click="showAddPatientModal = true"
           class="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
           <Plus class="w-4 h-4" />
-          Invite New Client
+          Add Patient
         </button>
       </div>
 
@@ -335,6 +414,40 @@ function openClientDetail(clientId: string) {
                 variant="compact"
                 @click.stop
               />
+              <template v-if="client.status === 'pending'">
+                <!-- Cancel confirmation inline -->
+                <template v-if="cancelConfirmClientId === client.id">
+                  <span class="text-xs text-gray-500">Cancel invitation?</span>
+                  <button
+                    @click.stop="cancelInvitation(client.id)"
+                    :disabled="cancellingId === client.id"
+                    class="text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-60 px-2.5 py-1.5 rounded-lg transition-colors"
+                  >
+                    {{ cancellingId === client.id ? 'Cancelling…' : 'Yes, cancel' }}
+                  </button>
+                  <button
+                    @click.stop="cancelConfirmClientId = null"
+                    class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 transition-colors"
+                  >
+                    No
+                  </button>
+                </template>
+                <template v-else>
+                  <button
+                    @click.stop="resendInvitation(client.id)"
+                    :disabled="resendingId === client.id"
+                    class="text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 disabled:opacity-60 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    {{ resendingId === client.id ? 'Resending…' : 'Resend' }}
+                  </button>
+                  <button
+                    @click.stop="cancelConfirmClientId = client.id"
+                    class="text-xs font-medium text-red-500 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </template>
+              </template>
               <button
                 v-if="client.status === 'active'"
                 @click.stop="openNewSessionSummary(client.id, client.cycleId)"
@@ -400,5 +513,12 @@ function openClientDetail(clientId: string) {
       </div>
 
     </div>
+
+    <!-- Add Patient Modal -->
+    <AddPatientModal
+      v-if="showAddPatientModal"
+      @close="showAddPatientModal = false"
+      @success="() => { showAddPatientModal = false; loadClients() }"
+    />
   </AppLayout>
 </template>
