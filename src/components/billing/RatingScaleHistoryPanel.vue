@@ -10,7 +10,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-vue-next'
-import { useAuthStore } from '@/stores/auth'
+import { supabase } from '@/lib/supabase'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ScaleAdministrationItem {
@@ -52,7 +52,6 @@ const emit = defineEmits<{
 }>()
 
 // ── State ──────────────────────────────────────────────────────────────────────
-const authStore = useAuthStore()
 const EDGE_FUNCTION_URL = import.meta.env.VITE_SUPABASE_EDGE_FUNCTION_URL as string
 
 const loading = ref(true)
@@ -66,7 +65,8 @@ async function fetchHistory(): Promise<void> {
   loading.value = true
   errorMsg.value = null
   try {
-    const token = authStore.session?.access_token
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token ?? ''
     const res = await fetch(
       `${EDGE_FUNCTION_URL}/rating-scales/history/${props.clientId}`,
       {
