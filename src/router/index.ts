@@ -7,6 +7,25 @@ const router = createRouter({
   routes: [
     // Auth
     {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('@/views/PasswordResetView.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/update-password',
+      name: 'update-password',
+      component: () => import('@/views/UpdatePasswordView.vue'),
+      meta: { public: true },
+    },
+    {
+      // Legacy route — kept for any bookmarks / old links
       path: '/auth',
       name: 'auth',
       component: () => import('@/views/AuthView.vue'),
@@ -152,12 +171,16 @@ router.beforeEach(async (to) => {
 
   // Not logged in → public routes only
   if (!auth.isAuthenticated) {
-    if (!publicRoute) return { name: 'signup' }
+    if (!publicRoute) {
+      // Save the attempted URL so LoginView can restore it after sign-in
+      sessionStorage.setItem('login_redirect_path', to.fullPath)
+      return { name: 'login' }
+    }
     return
   }
 
   // Logged in + on public auth page → redirect based on onboarding state
-  if (publicRoute && to.name !== 'verify-email') {
+  if (publicRoute && to.name !== 'verify-email' && to.name !== 'update-password') {
     if (!onboarding.progress) {
       await onboarding.loadProgress(auth.user!.id)
     }
