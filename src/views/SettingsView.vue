@@ -2,9 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase, supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 
 const auth = useAuthStore()
+const router = useRouter()
 
 type Tab = 'account' | 'practice' | 'clinician' | 'insurance'
 const activeTab = ref<Tab>('account')
@@ -572,6 +574,34 @@ onMounted(async () => {
             : 'border-transparent text-gray-500 hover:text-gray-700'"
         >
           {{ tab.label }}
+        </button>
+      </div>
+
+      <!-- Billing & Credentials shortcut (always visible) -->
+      <div class="mb-8">
+        <button
+          @click="router.push('/settings/credentials')"
+          class="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-5 py-4 hover:border-teal-300 hover:bg-teal-50/40 transition-colors group"
+        >
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center">
+              <svg class="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div class="text-left">
+              <p class="text-sm font-medium text-gray-900 group-hover:text-teal-700 transition-colors">
+                Billing &amp; Credentials
+              </p>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Update license expiration, supervision status, and CAQH ID
+              </p>
+            </div>
+          </div>
+          <svg class="w-4 h-4 text-gray-400 group-hover:text-teal-500 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
         </button>
       </div>
 

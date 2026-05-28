@@ -19,6 +19,8 @@ import BillingMonthView from '@/views/billing/BillingMonthView.vue'
 import BillingHistoryPanel from '@/components/billing/BillingHistoryPanel.vue'
 import AuditTrackerPanel from '@/components/billing/AuditTrackerPanel.vue'
 import AuditTrackerFormModal from '@/components/billing/AuditTrackerFormModal.vue'
+import BillingSetupCard from '@/components/BillingSetupCard.vue'
+import { supabaseAnonKey, EDGE_FUNCTION_URL } from '@/lib/supabase'
 
 const router = useRouter()
 
@@ -48,6 +50,30 @@ interface HubData {
 const hubData = ref<HubData | null>(null)
 const hubLoading = ref(true)
 
+// ── Phase 2 / Billing Setup Card ──────────────────────────────────────────────
+
+const phase2Complete = ref(true) // optimistic default — show card only when confirmed incomplete
+const phase2WizardStep = ref(1)
+
+async function loadCredentialStatus() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch(`${EDGE_FUNCTION_URL}/credentials/status`, {
+      headers: {
+        Authorization: `Bearer ${session?.access_token}`,
+        apikey: supabaseAnonKey,
+      },
+    })
+    if (res.ok) {
+      const s = await res.json() as { phase2_complete?: boolean; current_phase2_step?: number }
+      phase2Complete.value = s.phase2_complete ?? true
+      phase2WizardStep.value = s.current_phase2_step ?? 1
+    }
+  } catch {
+    // Non-fatal — card simply does not render
+  }
+}
+
 async function loadHub() {
   hubLoading.value = true
   try {
@@ -65,7 +91,10 @@ async function loadHub() {
   }
 }
 
-onMounted(loadHub)
+onMounted(() => {
+  loadHub()
+  loadCredentialStatus()
+})
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 
@@ -175,6 +204,12 @@ function urgencyLabel(deadline: string, status: string): string {
 
       <!-- Current Month Tab -->
       <template v-if="activeTab === 'current'">
+        <!-- Billing setup card — shown when Phase 2 (billing profile) is incomplete -->
+        <BillingSetupCard
+          v-if="!phase2Complete"
+          :wizard-step="phase2WizardStep"
+        />
+
         <BillingMonthView
           :year="currentMonth.year"
           :month="currentMonth.month"

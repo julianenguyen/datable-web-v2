@@ -90,37 +90,6 @@ const bannerConfig = computed<BannerConfig | null>(() => {
     }
   }
 
-  // License expired
-  if (s.billing_lock_reason === 'license_expired' || s.expiration_warning_level === 'expired') {
-    return {
-      variant: 'red',
-      message:
-        'Your license has expired. Billing features are locked. Update your license expiration date to restore access.',
-      linkText: 'Update credentials',
-      linkHref: '/settings/credentials',
-    }
-  }
-
-  // License expiring in 1–30 days
-  if (s.expiration_warning_level === 'orange') {
-    return {
-      variant: 'amber',
-      message: `Your license expires in ${s.days_until_expiration} days. Billing features will be suspended on your expiration date.`,
-      linkText: 'Update credentials',
-      linkHref: '/settings/credentials',
-    }
-  }
-
-  // License expiring in 31–90 days
-  if (s.expiration_warning_level === 'yellow') {
-    return {
-      variant: 'yellow',
-      message: `Your license expires in ${s.days_until_expiration} days. Please renew your license to avoid billing interruption.`,
-      linkText: 'Update credentials',
-      linkHref: '/settings/credentials',
-    }
-  }
-
   // Supervision status lock
   if (s.billing_lock_reason === 'supervision_status') {
     return {
