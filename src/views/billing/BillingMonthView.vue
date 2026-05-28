@@ -94,6 +94,7 @@ const reportData = ref<ReadyToBillResponse | null>(null)
 
 const generatingFor = ref<string | null>(null)      // client_id being generated
 const generatingError = ref<string | null>(null)
+const generatingErrorFor = ref<string | null>(null) // client_id whose last generate failed
 
 const showIncomplete = ref(false)
 const showGenerated = ref(false)
@@ -120,7 +121,7 @@ async function load() {
     const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch(
       `${EDGE_FUNCTION_URL}/billing-report/ready-to-bill?billing_month=${billingMonth.value}`,
-      { headers: { Authorization: `Bearer ${session?.access_token}` } }
+      { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` } }
     )
     if (!res.ok) {
       const err = await res.json() as { error: string }
@@ -150,7 +151,7 @@ async function generateReport(entry: ReadyEntry) {
     const res = await fetch(`${EDGE_FUNCTION_URL}/billing-report/generate`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${session?.access_token}`,
+        Authorization: `Bearer ${session?.access_token ?? ''}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -169,6 +170,7 @@ async function generateReport(entry: ReadyEntry) {
     previewReportId.value = json.report_id!
     previewClientName.value = entry.client_name
   } catch (e: unknown) {
+    generatingErrorFor.value = entry.client_id
     generatingError.value = e instanceof Error ? e.message : 'Unexpected error'
   } finally {
     generatingFor.value = null
@@ -195,7 +197,7 @@ async function confirmSkip() {
     const res = await fetch(`${EDGE_FUNCTION_URL}/billing-report/skip`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${session?.access_token}`,
+        Authorization: `Bearer ${session?.access_token ?? ''}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -333,15 +335,10 @@ function onAttested(pdfUrl: string, _csvUrl: string) {
                   </button>
                 </div>
               </div>
-              <!-- Generate error -->
-              <div v-if="generatingError && generatingFor === null && entry.client_id === previewReportId" class="px-5 pb-3 text-xs text-red-600">
+              <!-- Generate error — scoped to the row that failed -->
+              <div v-if="generatingError && generatingFor === null && entry.client_id === generatingErrorFor" class="px-5 pb-3 text-xs text-red-600">
                 {{ generatingError }}
               </div>
-            </div>
-
-            <!-- Global generate error -->
-            <div v-if="generatingError && generatingFor === null" class="text-xs text-red-600 px-1">
-              {{ generatingError }}
             </div>
           </div>
         </section>

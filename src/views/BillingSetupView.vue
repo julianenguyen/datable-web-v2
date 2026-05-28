@@ -276,6 +276,15 @@ const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 
 async function handleComplete() {
+  // Guard: Step 3 (supervision status) must be answered before saving.
+  // This can be null if the user navigated via the step indicator without
+  // filling in Step 3, then clicked "Skip for now" on Step 5.
+  if (isIndependentlyLicensed.value === null) {
+    currentStep.value = 3
+    saveError.value = 'Please answer the supervision question before completing setup.'
+    return
+  }
+
   isSaving.value = true
   saveError.value = null
 
