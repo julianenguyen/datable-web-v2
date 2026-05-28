@@ -8,6 +8,7 @@ import CarePlanStatusBadge from '@/components/care-plan/CarePlanStatusBadge.vue'
 import ContactStatusBadge from '@/components/billing/ContactStatusBadge.vue'
 import CoordinationStatusBadge from '@/components/billing/CoordinationStatusBadge.vue'
 import AddPatientModal from '@/components/AddPatientModal.vue'
+import GettingStartedChecklist from '@/components/GettingStartedChecklist.vue'
 
 interface ClientCard {
   id: string
@@ -41,6 +42,17 @@ const unarchivingId = ref<string | null>(null)
 // Add Patient modal
 const showAddPatientModal = ref(false)
 
+// Getting Started checklist
+interface OnboardingProgress {
+  step_credentials_complete: boolean
+  step_billing_complete: boolean
+  step_patient_invited: boolean
+  all_steps_complete: boolean
+  dismissed_at: string | null
+}
+const onboardingProgress = ref<OnboardingProgress | null>(null)
+const onboardingLoading = ref(true)
+
 // invitation ID map for pending clients (clientId → invitationId)
 const invitationIds = ref<Record<string, string>>({})
 
@@ -49,9 +61,15 @@ const cancelConfirmClientId = ref<string | null>(null)
 const cancellingId = ref<string | null>(null)
 const resendingId = ref<string | null>(null)
 
-onMounted(loadClients)
+onMounted(() => {
+  loadClients()
+  loadOnboardingProgress()
+})
 watch(() => route.fullPath, () => {
-  if (route.path === '/') loadClients()
+  if (route.path === '/') {
+    loadClients()
+    loadOnboardingProgress()
+  }
 })
 
 async function loadClients() {
@@ -184,6 +202,36 @@ async function loadClients() {
   loading.value = false
 }
 
+async function loadOnboardingProgress() {
+  onboardingLoading.value = true
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token ?? ''
+    const res = await fetch(`${EDGE_FUNCTION_URL}/onboarding/progress`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: supabaseAnonKey,
+      },
+    })
+    if (res.ok) {
+      onboardingProgress.value = await res.json() as OnboardingProgress
+    }
+  } catch (e) {
+    console.error('[Dashboard] failed to load onboarding progress:', e)
+  } finally {
+    onboardingLoading.value = false
+  }
+}
+
+function handleChecklistDismiss() {
+  if (onboardingProgress.value) {
+    onboardingProgress.value = {
+      ...onboardingProgress.value,
+      dismissed_at: new Date().toISOString(),
+    }
+  }
+}
+
 async function unarchiveClient(clientId: string) {
   unarchivingId.value = clientId
   try {
@@ -300,6 +348,26 @@ function openClientDetail(clientId: string) {
 <template>
   <AppLayout>
     <div class="flex-1 p-8">
+      <!-- Getting Started checklist skeleton -->
+      <div
+        v-if="onboardingLoading"
+        class="mb-6 bg-white border border-gray-200 rounded-lg p-6 space-y-3 animate-pulse"
+      >
+        <div class="h-4 bg-gray-100 rounded w-48" />
+        <div class="h-1.5 bg-gray-100 rounded-full" />
+        <div class="h-10 bg-gray-100 rounded" />
+        <div class="h-10 bg-gray-100 rounded" />
+        <div class="h-10 bg-gray-100 rounded" />
+      </div>
+
+      <!-- Getting Started checklist -->
+      <GettingStartedChecklist
+        v-else-if="onboardingProgress && !onboardingProgress.dismissed_at"
+        :progress="onboardingProgress"
+        @dismiss="handleChecklistDismiss"
+        @open-add-patient="showAddPatientModal = true"
+      />
+
       <!-- Header -->
       <div class="flex items-center justify-between mb-6">
         <div>
