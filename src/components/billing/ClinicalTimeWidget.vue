@@ -49,6 +49,9 @@ const sessionElapsedSeconds = ref(0)
 const sessionTimerHandle = ref<ReturnType<typeof setInterval> | null>(null)
 const sessionStarting = ref(false)
 const sessionEnding = ref(false)
+// Cached token for use in synchronous visibility-change handler (fetch keepalive).
+// Refreshed each time a session starts; JWT lifetime (~1 hour) far exceeds any session.
+const cachedToken = ref<string>('')
 
 // 30-minute inactivity timer
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
@@ -121,6 +124,8 @@ async function startSession() {
   if (activeSession.value || sessionStarting.value) return
   sessionStarting.value = true
   try {
+    // Cache fresh token for the visibility-change handler (which can't await)
+    cachedToken.value = await getToken()
     const res = await apiFetch('/platform-session/start', {
       method: 'POST',
       body: JSON.stringify({ client_id: props.clientId }),
@@ -172,7 +177,9 @@ function startSessionTimer() {
   if (sessionTimerHandle.value) clearInterval(sessionTimerHandle.value)
   sessionTimerHandle.value = setInterval(() => {
     sessionElapsedSeconds.value++
-    resetInactivityTimer()
+    // Do NOT reset the inactivity timer here — the interval ticking every second
+    // would constantly defer it, making it never fire. onUserActivity() is the
+    // only correct place to reset it (called by the parent on real user interaction).
   }, 1000)
 }
 
@@ -207,20 +214,25 @@ function onUserActivity() {
 // ── Page visibility / unload hooks ─────────────────────────────────────────────
 function handleVisibilityChange() {
   if (document.visibilityState === 'hidden' && activeSession.value) {
-    // Use sendBeacon for reliability on page hide/close
     const sessionId = activeSession.value.id
-    const token = '' // sendBeacon cannot set headers; server handles gracefully
     stopSessionTimer()
     clearInactivityTimer()
 
-    // Best-effort beacon — server already caps at 60 min so worst case is a
-    // slightly imprecise entry. Errors are discarded silently.
-    const url = `${EDGE_FUNCTION_URL}/clinical-time/platform-session/end`
-    const blob = new Blob(
-      [JSON.stringify({ session_id: sessionId })],
-      { type: 'application/json' },
-    )
-    navigator.sendBeacon(url, blob)
+    // fetch with keepalive: true survives page hide/close and supports
+    // Authorization headers — sendBeacon cannot carry custom headers so it
+    // always returned 401. cachedToken was populated at session start;
+    // JWT lifetime (~1 hr) far exceeds any realistic session.
+    fetch(`${EDGE_FUNCTION_URL}/clinical-time/platform-session/end`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${cachedToken.value}`,
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ session_id: sessionId }),
+      keepalive: true,
+    }).catch(() => { /* silent — auto-capture errors must never surface */ })
+
     activeSession.value = null
     sessionElapsedSeconds.value = 0
   }
@@ -234,10 +246,26 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  endSession()
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  // Synchronous cleanup first
   stopSessionTimer()
   clearInactivityTimer()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+
+  // Fire end-session request with keepalive so it survives SPA navigation.
+  // Cannot await here (onUnmounted is synchronous); keepalive ensures the
+  // browser does not abort the request when the component tears down.
+  if (activeSession.value) {
+    fetch(`${EDGE_FUNCTION_URL}/clinical-time/platform-session/end`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${cachedToken.value}`,
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ session_id: activeSession.value.id }),
+      keepalive: true,
+    }).catch(() => { /* silent — auto-capture errors must never surface */ })
+  }
 })
 
 // Reload when client changes (e.g. navigating between clients)

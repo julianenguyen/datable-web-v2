@@ -207,6 +207,17 @@ function moodTrendLabel(trend: string) {
   return labels[trend] ?? trend
 }
 
+// Extract a human-readable error from a billing gate or API response.
+// The backend returns { error, reason, message } on 4xx — prefer message over raw JSON.
+async function extractErrorMessage(res: Response): Promise<string> {
+  try {
+    const data = await res.json() as { message?: string; error?: string }
+    return data.message ?? data.error ?? `Error ${res.status}`
+  } catch {
+    return `Error ${res.status}`
+  }
+}
+
 // ── API calls ─────────────────────────────────────────────────────────────────
 
 async function loadReport() {
@@ -217,7 +228,7 @@ async function loadReport() {
       `${EDGE_FUNCTION_URL}/ccm-reports/ccm-reports/${props.reportId}`,
       { headers: await authHeaders() }
     )
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) throw new Error(await extractErrorMessage(res))
     const data = await res.json()
     report.value = data.report as CcmReport
     timeEntries.value = data.time_entries as CcmTimeEntry[]
@@ -259,7 +270,7 @@ async function addTimeEntry() {
         }),
       }
     )
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) throw new Error(await extractErrorMessage(res))
     newTimeEntry.value = {
       entry_type: 'care_coordination',
       duration_minutes: '',
@@ -292,7 +303,7 @@ async function applyOverride() {
         body: JSON.stringify({ override_minutes: mins }),
       }
     )
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) throw new Error(await extractErrorMessage(res))
     await loadReport()
   } catch (e) {
     overrideError.value = e instanceof Error ? e.message : 'Failed to apply override'
@@ -310,7 +321,7 @@ async function finalizeReport() {
       `${EDGE_FUNCTION_URL}/ccm-reports/ccm-reports/${props.reportId}/finalize`,
       { method: 'POST', headers: await authHeaders() }
     )
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) throw new Error(await extractErrorMessage(res))
     showFinalizeModal.value = false
     await loadReport()
     emit('finalized', props.reportId)
@@ -330,7 +341,7 @@ async function downloadFile(type: 'pdf' | 'excel') {
       `${EDGE_FUNCTION_URL}/ccm-reports/ccm-reports/${props.reportId}/generate-files`,
       { method: 'POST', headers: await authHeaders() }
     )
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) throw new Error(await extractErrorMessage(res))
     const data = await res.json()
     const url = type === 'pdf' ? data.pdf_url : data.excel_url
     if (url) window.open(url, '_blank')

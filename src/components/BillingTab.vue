@@ -47,6 +47,17 @@ async function authHeaders(): Promise<Record<string, string>> {
   }
 }
 
+// Extract a human-readable error from a billing gate or API response.
+// The backend returns { error, reason, message } on 4xx — prefer message over raw JSON.
+async function extractErrorMessage(res: Response): Promise<string> {
+  try {
+    const data = await res.json() as { message?: string; error?: string }
+    return data.message ?? data.error ?? `Error ${res.status}`
+  } catch {
+    return `Error ${res.status}`
+  }
+}
+
 async function loadReports() {
   isLoading.value = true
   error.value = null
@@ -55,7 +66,7 @@ async function loadReports() {
       `${EDGE_FUNCTION_URL}/ccm-reports/clients/${props.clientId}/ccm-reports`,
       { headers: await authHeaders() }
     )
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) throw new Error(await extractErrorMessage(res))
     const data = await res.json()
     reports.value = data.reports ?? []
   } catch (e) {
@@ -77,7 +88,7 @@ async function generateManualReport() {
       method: 'POST',
       headers: await authHeaders(),
     })
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) throw new Error(await extractErrorMessage(res))
     await loadReports()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to generate report'
@@ -95,7 +106,7 @@ async function downloadFile(reportId: string, type: 'pdf' | 'excel') {
       `${EDGE_FUNCTION_URL}/ccm-reports/ccm-reports/${reportId}/generate-files`,
       { method: 'POST', headers: await authHeaders() }
     )
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) throw new Error(await extractErrorMessage(res))
     const data = await res.json()
     const url = type === 'pdf' ? data.pdf_url : data.excel_url
     if (url) window.open(url, '_blank')
