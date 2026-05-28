@@ -36,6 +36,21 @@ const props = defineProps<{
   clinicalTimeMessage: string | null
   onLogTime?: () => void
 
+  // Monthly contact gate
+  contactStatus: 'loading' | 'pass' | 'fail' | 'warn'
+  contactMessage: string | null
+  onLogContact?: () => void
+
+  // Treatment coordination gate
+  coordinationStatus: 'loading' | 'pass' | 'fail' | 'warn'
+  coordinationMessage: string | null
+  onLogCoordination?: () => void
+
+  // Rating scale soft gate (amber only — never red)
+  ratingScaleStatus: 'loading' | 'pass' | 'warn'
+  ratingScaleMessage: string | null
+  onAdministerScale?: () => void
+
   // Report generation
   generating: boolean
   onGenerateReport?: () => void
@@ -79,8 +94,35 @@ const gates = computed<Gate[]>(() => [
     actionLabel: props.clinicalTimeStatus === 'fail' ? 'Log Time' : undefined,
     onAction: props.onLogTime,
   },
+  {
+    key: 'contact',
+    label: 'Monthly Care Team Contact',
+    status: props.contactStatus,
+    message: props.contactMessage,
+    actionLabel: props.contactStatus === 'fail' ? 'Log Contact' : undefined,
+    onAction: props.onLogContact,
+  },
+  {
+    key: 'coordination',
+    label: 'Treatment Coordination (G0323)',
+    status: props.coordinationStatus,
+    message: props.coordinationMessage,
+    actionLabel: props.coordinationStatus === 'fail' ? 'Log Coordination' : undefined,
+    onAction: props.onLogCoordination,
+  },
 ])
 
+// Soft gate — separate from hard gates (amber only, never blocks billing)
+const ratingScaleGate = computed<Gate>(() => ({
+  key: 'ratingScale',
+  label: 'Rating Scale (90-day) — Recommended',
+  status: props.ratingScaleStatus,
+  message: props.ratingScaleMessage,
+  actionLabel: props.ratingScaleStatus === 'warn' ? 'Administer Scale' : undefined,
+  onAction: props.onAdministerScale,
+}))
+
+// Hard gates only determine billing readiness — rating scale is a soft gate
 const allPass = computed(() =>
   gates.value.every((g) => g.status === 'pass')
 )
@@ -187,6 +229,33 @@ function rowBg(status: GateStatus): string {
       </div>
     </div>
 
+    <!-- Rating scale soft gate (amber — never blocks billing) -->
+    <div
+      class="flex items-start gap-3 px-5 py-3.5 border-t border-dashed border-amber-200"
+      :class="ratingScaleGate.status === 'pass' ? 'bg-green-50' : 'bg-amber-50'"
+    >
+      <component
+        :is="iconFor(ratingScaleGate.status as GateStatus)"
+        :size="16"
+        class="mt-0.5 shrink-0 transition-colors"
+        :class="[colorFor(ratingScaleGate.status as GateStatus), { 'animate-spin': ratingScaleGate.status === 'loading' }]"
+      />
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-gray-800">{{ ratingScaleGate.label }}</p>
+        <p v-if="ratingScaleGate.message" class="text-xs text-gray-500 mt-0.5 leading-snug">
+          {{ ratingScaleGate.message }}
+        </p>
+      </div>
+      <button
+        v-if="ratingScaleGate.actionLabel && ratingScaleGate.onAction"
+        type="button"
+        class="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+        @click="ratingScaleGate.onAction()"
+      >
+        {{ ratingScaleGate.actionLabel }}
+      </button>
+    </div>
+
     <!-- Generate Report footer -->
     <div class="px-5 py-4 border-t border-gray-100 bg-gray-50">
       <button
@@ -204,7 +273,7 @@ function rowBg(status: GateStatus): string {
       </button>
 
       <p v-if="!allPass && !anyLoading" class="mt-2 text-center text-xs text-gray-400">
-        All four gates must pass before generating a report.
+        All six hard gates must pass before generating a report.
       </p>
     </div>
   </div>

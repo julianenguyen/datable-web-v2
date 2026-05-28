@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
-import { supabase } from '@/lib/supabase'
+import { supabase, EDGE_FUNCTION_URL } from '@/lib/supabase'
 import { logPhiAccess } from '@/lib/audit'
 import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Sparkles, Trash2, Plus, Pencil, X, Check, RotateCcw } from 'lucide-vue-next'
 import { WHEEL_OF_LIFE } from '@/data/wheelOfLife'
@@ -23,6 +23,13 @@ import ClinicalTimeWidget from '@/components/billing/ClinicalTimeWidget.vue'
 import TimeLogModal from '@/components/billing/TimeLogModal.vue'
 import TimeLogHistory from '@/components/billing/TimeLogHistory.vue'
 import BillingReadinessPanel from '@/components/billing/BillingReadinessPanel.vue'
+import SessionContactWidget from '@/components/billing/SessionContactWidget.vue'
+import SessionContactLogModal from '@/components/billing/SessionContactLogModal.vue'
+import PatientCareTeamDirectory from '@/components/billing/PatientCareTeamDirectory.vue'
+import TreatmentCoordinationLog from '@/components/billing/TreatmentCoordinationLog.vue'
+import RatingScaleHistoryPanel from '@/components/billing/RatingScaleHistoryPanel.vue'
+import RatingScaleAdminModal from '@/components/billing/RatingScaleAdminModal.vue'
+import CoordinationStatusBadge from '@/components/billing/CoordinationStatusBadge.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -47,12 +54,14 @@ interface InitiatingVisitStatusPayload {
   icd10Description?: string
   initiatingVisitId?: string
 }
-const visitCanBill = ref(true)
-const consentCanBill = ref(true)
-const carePlanCanBill = ref(true)
+const visitCanBill = ref(false)
+const consentCanBill = ref(false)
+const carePlanCanBill = ref(false)
 const clinicalTimeCanBill = ref(false)
+const contactCanBill = ref(false)
+const coordinationCanBill = ref(false)
 const canBill = computed(
-  () => visitCanBill.value && consentCanBill.value && carePlanCanBill.value && clinicalTimeCanBill.value,
+  () => visitCanBill.value && consentCanBill.value && carePlanCanBill.value && clinicalTimeCanBill.value && contactCanBill.value && coordinationCanBill.value,
 )
 const initiatingVisitStatusKind = ref<InitiatingVisitStatusKind>('missing')
 const currentIcd10 = ref('')
@@ -109,7 +118,10 @@ type GateStatusKind = 'loading' | 'pass' | 'fail' | 'warn'
 const billingTabRef = ref<InstanceType<typeof BillingTab> | null>(null)
 const clinicalTimeWidgetRef = ref<InstanceType<typeof ClinicalTimeWidget> | null>(null)
 const clinicalTimeHistoryRef = ref<InstanceType<typeof TimeLogHistory> | null>(null)
+const sessionContactWidgetRef = ref<InstanceType<typeof SessionContactWidget> | null>(null)
+const treatmentCoordinationLogRef = ref<InstanceType<typeof TreatmentCoordinationLog> | null>(null)
 const showTimeLogModal = ref(false)
+const showContactLogModal = ref(false)
 const clinicalTimeGateStatus = ref<GateStatusKind>('loading')
 const clinicalTimeGateMessage = ref<string | null>(null)
 const visitGateStatus = ref<GateStatusKind>('loading')
@@ -118,6 +130,15 @@ const consentGateStatus = ref<GateStatusKind>('loading')
 const consentGateMessage = ref<string | null>(null)
 const carePlanGateStatus = ref<GateStatusKind>('loading')
 const carePlanGateMessage = ref<string | null>(null)
+const contactGateStatus = ref<GateStatusKind>('loading')
+const contactGateMessage = ref<string | null>(null)
+const coordinationGateStatus = ref<GateStatusKind>('loading')
+const coordinationGateMessage = ref<string | null>(null)
+
+// Rating scale soft gate (7th gate — amber only, never blocks billing)
+const ratingScaleGateStatus = ref<'loading' | 'pass' | 'warn'>('loading')
+const ratingScaleGateMessage = ref<string | null>(null)
+const showRatingScaleAdminModal = ref(false)
 
 function onClinicalTimeStatusLoaded(meetsThreshold: boolean, totalMinutes: number) {
   clinicalTimeCanBill.value = meetsThreshold
@@ -133,6 +154,53 @@ function onTimeEntrySaved() {
   showTimeLogModal.value = false
   clinicalTimeWidgetRef.value?.reload()
   clinicalTimeHistoryRef.value?.reload()
+}
+
+function onContactStatusLoaded(hasContact: boolean) {
+  contactCanBill.value = hasContact
+  contactGateStatus.value = hasContact ? 'pass' : 'fail'
+  contactGateMessage.value = hasContact
+    ? null
+    : 'No care team contact logged this month'
+}
+
+function onContactSaved() {
+  showContactLogModal.value = false
+  sessionContactWidgetRef.value?.reload()
+}
+
+function onCoordinationStatusLoaded(hasCoordination: boolean) {
+  coordinationCanBill.value = hasCoordination
+  coordinationGateStatus.value = hasCoordination ? 'pass' : 'fail'
+  coordinationGateMessage.value = hasCoordination
+    ? null
+    : 'No treatment coordination logged this month'
+}
+
+async function loadRatingScaleGate() {
+  ratingScaleGateStatus.value = 'loading'
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch(
+      `${EDGE_FUNCTION_URL}/rating-scales/billing-gate/${clientId}`,
+      { headers: { Authorization: `Bearer ${session?.access_token}` } }
+    )
+    if (!res.ok) {
+      ratingScaleGateStatus.value = 'warn'
+      ratingScaleGateMessage.value = 'Could not check rating scale status'
+      return
+    }
+    const json = await res.json() as { hasRecentScale: boolean; daysSinceLastScale: number | null }
+    ratingScaleGateStatus.value = json.hasRecentScale ? 'pass' : 'warn'
+    ratingScaleGateMessage.value = json.hasRecentScale
+      ? `Rating scale administered in past 90 days`
+      : json.daysSinceLastScale !== null
+        ? `Last scale ${json.daysSinceLastScale} days ago — 90-day window exceeded`
+        : 'No validated rating scale in past 90 days — recommended for billing'
+  } catch {
+    ratingScaleGateStatus.value = 'warn'
+    ratingScaleGateMessage.value = 'Could not check rating scale status'
+  }
 }
 
 // Diagnosis change modal state
@@ -704,7 +772,7 @@ onMounted(async () => {
     insuranceProvider.value = clientRow.insurance_provider ?? ''
   }
 
-  await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory(), loadPresessionReflection(), loadSessions()])
+  await Promise.all([loadLogs(), loadHealthSummary(), loadSessionHistory(), loadPresessionReflection(), loadSessions(), loadRatingScaleGate()])
 
   // Load brief directly from presession_briefs for the active cycle
   await loadBrief()
@@ -1958,6 +2026,9 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           />
         </div>
 
+        <!-- Patient Care Team Directory (G0323 Treatment Coordination) -->
+        <PatientCareTeamDirectory :client-id="clientId" />
+
         <!-- G0323 Initiating Visit status -->
         <InitiatingVisitStatusBadge
           ref="initiatingVisitBadgeRef"
@@ -2000,6 +2071,23 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           />
         </div>
 
+        <!-- G0323 Monthly Care Team Contact (Item 6) -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <SessionContactWidget
+            ref="sessionContactWidgetRef"
+            :client-id="clientId"
+            @status-loaded="onContactStatusLoaded"
+            @log-contact="showContactLogModal = true"
+          />
+        </div>
+
+        <!-- G0323 Treatment Coordination (Item 7) -->
+        <TreatmentCoordinationLog
+          ref="treatmentCoordinationLogRef"
+          :client-id="clientId"
+          @status-loaded="onCoordinationStatusLoaded"
+        />
+
         <!-- G0323 Billing Readiness Panel -->
         <BillingReadinessPanel
           :visit-status="visitGateStatus"
@@ -2013,8 +2101,23 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
           :clinical-time-status="clinicalTimeGateStatus"
           :clinical-time-message="clinicalTimeGateMessage"
           :on-log-time="() => showTimeLogModal = true"
+          :contact-status="contactGateStatus"
+          :contact-message="contactGateMessage"
+          :on-log-contact="() => showContactLogModal = true"
+          :coordination-status="coordinationGateStatus"
+          :coordination-message="coordinationGateMessage"
+          :on-log-coordination="() => treatmentCoordinationLogRef?.reload()"
+          :rating-scale-status="ratingScaleGateStatus"
+          :rating-scale-message="ratingScaleGateMessage"
+          :on-administer-scale="() => showRatingScaleAdminModal = true"
           :generating="false"
           @generate-report="billingTabRef?.generateManualReport()"
+        />
+
+        <!-- Rating Scale History Panel -->
+        <RatingScaleHistoryPanel
+          :client-id="clientId"
+          @administer-scale="showRatingScaleAdminModal = true"
         />
 
         <!-- Billing enrollment consent -->
@@ -2040,6 +2143,14 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         :client-name="clientName"
         :on-revoked="onConsentRevoked"
         :on-cancel="onRevokeCancelled"
+      />
+
+      <!-- ── Rating Scale Admin Modal ── -->
+      <RatingScaleAdminModal
+        v-if="showRatingScaleAdminModal"
+        :client-id="clientId"
+        @close="showRatingScaleAdminModal = false"
+        @completed="() => { showRatingScaleAdminModal = false; loadRatingScaleGate() }"
       />
 
       <!-- ── Initiating Visit Wizard overlay ── -->
@@ -2076,6 +2187,15 @@ const totalSVGHeight = computed(() => CHART.PT + CHART.H + CHART.PB)
         :open="showTimeLogModal"
         @close="showTimeLogModal = false"
         @saved="onTimeEntrySaved"
+      />
+
+      <!-- ── Session Contact Log Modal ── -->
+      <SessionContactLogModal
+        :client-id="clientId"
+        :client-name="clientName"
+        :is-open="showContactLogModal"
+        @close="showContactLogModal = false"
+        @saved="onContactSaved"
       />
 
       <!-- ── Diagnosis Change Confirmation Modal ── -->

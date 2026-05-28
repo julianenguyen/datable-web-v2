@@ -5,6 +5,8 @@ import AppLayout from '@/layouts/AppLayout.vue'
 import { supabase } from '@/lib/supabase'
 import { AlertTriangle, Clock, CheckCircle2, Plus, FileText, ChevronRight, ChevronDown, RotateCcw, Archive } from 'lucide-vue-next'
 import CarePlanStatusBadge from '@/components/care-plan/CarePlanStatusBadge.vue'
+import ContactStatusBadge from '@/components/billing/ContactStatusBadge.vue'
+import CoordinationStatusBadge from '@/components/billing/CoordinationStatusBadge.vue'
 
 interface ClientCard {
   id: string
@@ -321,6 +323,16 @@ function openClientDetail(clientId: string) {
                 :client-id="client.id"
                 :compact="true"
                 :on-action="() => openClientDetail(client.id)"
+                @click.stop
+              />
+              <ContactStatusBadge
+                :client-id="client.id"
+                variant="compact"
+                @click.stop
+              />
+              <CoordinationStatusBadge
+                :client-id="client.id"
+                variant="compact"
                 @click.stop
               />
               <button

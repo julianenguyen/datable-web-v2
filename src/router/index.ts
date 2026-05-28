@@ -117,6 +117,11 @@ const router = createRouter({
       component: () => import('@/views/InviteClientView.vue'),
     },
     {
+      path: '/billing/:year/:month',
+      name: 'billing-month',
+      component: () => import('@/views/billing/BillingMonthView.vue'),
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),

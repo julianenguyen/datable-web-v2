@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
-import { LogOut, LayoutDashboard } from 'lucide-vue-next'
+import { LogOut, LayoutDashboard, Receipt } from 'lucide-vue-next'
 import BillingStatusBanner from '@/components/BillingStatusBanner.vue'
 
 const auth = useAuthStore()
@@ -11,6 +11,10 @@ async function handleSignOut() {
   await auth.signOut()
   router.push('/auth')
 }
+
+// Link to current billing month
+const now = new Date()
+const billingMonthRoute = `/billing/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
 </script>
 
 <template>
@@ -33,6 +37,17 @@ async function handleSignOut() {
         >
           <LayoutDashboard class="w-4 h-4 shrink-0" />
           Client Roster
+        </router-link>
+
+        <router-link
+          :to="billingMonthRoute"
+          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+          :class="$route.path.startsWith('/billing')
+            ? 'bg-teal-50 text-teal-700'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+        >
+          <Receipt class="w-4 h-4 shrink-0" />
+          Billing
         </router-link>
       </nav>
 
