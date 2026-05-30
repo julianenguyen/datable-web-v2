@@ -6,6 +6,10 @@ import { US_STATES } from '@/constants/states'
 
 const emit = defineEmits<{ complete: [] }>()
 
+// Same key used by the onboarding store — written here directly so
+// the wizard can suppress itself synchronously on any future mount.
+const STORAGE_KEY = 'datable_credential_wizard_done'
+
 // ── Visibility / init ─────────────────────────────────────────────────────────
 
 const isVisible = ref(false)
@@ -218,6 +222,14 @@ interface CredentialStatus {
 }
 
 onMounted(async () => {
+  // Fast path: if we already know credentials are done, skip the network
+  // call and signal the parent immediately.
+  if (localStorage.getItem(STORAGE_KEY)) {
+    isInitializing.value = false
+    emit('complete')
+    return
+  }
+
   try {
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData.session?.access_token ?? ''
@@ -242,7 +254,9 @@ onMounted(async () => {
     const status = await res.json() as CredentialStatus
 
     if (status.phase1_complete) {
-      // Phase 1 already complete — wizard never shows
+      // Phase 1 already complete — persist immediately so future mounts
+      // skip this async check entirely, then signal the parent.
+      localStorage.setItem(STORAGE_KEY, '1')
       emit('complete')
       return
     }
