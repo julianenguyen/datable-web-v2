@@ -22,9 +22,11 @@ export const useOnboardingStore = defineStore('onboarding', () => {
   const clinicianId = ref<string | null>(null)
   const practiceSegment = ref<string | null>(null)
   const loading = ref(false)
-  // Persists across per-view AppLayout remounts so the credential wizard
-  // doesn't re-show after the user completes it in the same session.
-  const credentialWizardDone = ref(false)
+  // Persists across page reloads via localStorage. Once a user's
+  // phase1_complete=true is confirmed we never show the wizard again
+  // until sign-out (reset() clears localStorage too).
+  const STORAGE_KEY = 'datable_credential_wizard_done'
+  const credentialWizardDone = ref(!!localStorage.getItem(STORAGE_KEY))
 
   const isComplete = computed(() => !!progress.value?.completed_at)
 
@@ -105,12 +107,18 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     if (data) progress.value = data as OnboardingProgress
   }
 
+  function markCredentialWizardDone() {
+    localStorage.setItem(STORAGE_KEY, '1')
+    credentialWizardDone.value = true
+  }
+
   function reset() {
     progress.value = null
     practiceId.value = null
     clinicianId.value = null
     practiceSegment.value = null
     credentialWizardDone.value = false
+    localStorage.removeItem(STORAGE_KEY)
   }
 
   return {
@@ -122,6 +130,7 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     isComplete,
     currentStepRoute,
     credentialWizardDone,
+    markCredentialWizardDone,
     loadProgress,
     initProgress,
     markStep,

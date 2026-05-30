@@ -12,8 +12,8 @@ const onboarding = useOnboardingStore()
 const router = useRouter()
 
 function handleWizardComplete() {
-  // Store flag in Pinia so it survives per-view AppLayout remounts
-  onboarding.credentialWizardDone = true
+  // Persist in localStorage so the wizard never re-appears after page reload
+  onboarding.markCredentialWizardDone()
 }
 
 async function handleSignOut() {
