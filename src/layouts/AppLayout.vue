@@ -1,20 +1,12 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
-import { useOnboardingStore } from '@/stores/onboarding'
 import { useRouter } from 'vue-router'
 import { LogOut, LayoutDashboard, Receipt } from 'lucide-vue-next'
 import BillingStatusBanner from '@/components/BillingStatusBanner.vue'
 import ExpirationWarningBanner from '@/components/ExpirationWarningBanner.vue'
-import OnboardingWizard from '@/components/OnboardingWizard.vue'
 
 const auth = useAuthStore()
-const onboarding = useOnboardingStore()
 const router = useRouter()
-
-function handleWizardComplete() {
-  // Persist in localStorage so the wizard never re-appears after page reload
-  onboarding.markCredentialWizardDone()
-}
 
 async function handleSignOut() {
   await auth.signOut()
@@ -89,6 +81,5 @@ async function handleSignOut() {
     </div>
   </div>
 
-  <!-- Phase 1 credential wizard — shown as full-screen overlay until complete -->
-  <OnboardingWizard v-if="!onboarding.credentialWizardDone" @complete="handleWizardComplete" />
+  <!-- Wizard moved to App.vue so it mounts once for the entire app, not per-view -->
 </template>
