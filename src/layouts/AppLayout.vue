@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import { LogOut, LayoutDashboard, Receipt } from 'lucide-vue-next'
@@ -8,6 +9,12 @@ import OnboardingWizard from '@/components/OnboardingWizard.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
+const wizardDone = ref(false)
+
+function handleWizardComplete() {
+  wizardDone.value = true
+  router.push('/')
+}
 
 async function handleSignOut() {
   await auth.signOut()
@@ -83,5 +90,5 @@ async function handleSignOut() {
   </div>
 
   <!-- Phase 1 credential wizard — shown as full-screen overlay until complete -->
-  <OnboardingWizard @complete="() => {}" />
+  <OnboardingWizard v-if="!wizardDone" @complete="handleWizardComplete" />
 </template>
