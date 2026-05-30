@@ -22,6 +22,9 @@ export const useOnboardingStore = defineStore('onboarding', () => {
   const clinicianId = ref<string | null>(null)
   const practiceSegment = ref<string | null>(null)
   const loading = ref(false)
+  // Persists across per-view AppLayout remounts so the credential wizard
+  // doesn't re-show after the user completes it in the same session.
+  const credentialWizardDone = ref(false)
 
   const isComplete = computed(() => !!progress.value?.completed_at)
 
@@ -107,6 +110,7 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     practiceId.value = null
     clinicianId.value = null
     practiceSegment.value = null
+    credentialWizardDone.value = false
   }
 
   return {
@@ -117,6 +121,7 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     loading,
     isComplete,
     currentStepRoute,
+    credentialWizardDone,
     loadProgress,
     initProgress,
     markStep,

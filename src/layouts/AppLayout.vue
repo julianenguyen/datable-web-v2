@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useOnboardingStore } from '@/stores/onboarding'
 import { useRouter } from 'vue-router'
 import { LogOut, LayoutDashboard, Receipt } from 'lucide-vue-next'
 import BillingStatusBanner from '@/components/BillingStatusBanner.vue'
@@ -8,12 +8,12 @@ import ExpirationWarningBanner from '@/components/ExpirationWarningBanner.vue'
 import OnboardingWizard from '@/components/OnboardingWizard.vue'
 
 const auth = useAuthStore()
+const onboarding = useOnboardingStore()
 const router = useRouter()
-const wizardDone = ref(false)
 
 function handleWizardComplete() {
-  wizardDone.value = true
-  router.push('/')
+  // Store flag in Pinia so it survives per-view AppLayout remounts
+  onboarding.credentialWizardDone = true
 }
 
 async function handleSignOut() {
@@ -90,5 +90,5 @@ async function handleSignOut() {
   </div>
 
   <!-- Phase 1 credential wizard — shown as full-screen overlay until complete -->
-  <OnboardingWizard v-if="!wizardDone" @complete="handleWizardComplete" />
+  <OnboardingWizard v-if="!onboarding.credentialWizardDone" @complete="handleWizardComplete" />
 </template>
